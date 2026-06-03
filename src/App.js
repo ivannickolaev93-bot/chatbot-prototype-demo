@@ -54,15 +54,7 @@ const KNOWLEDGE_BASES = [
 
 const VERSION_AUTHOR = 'Константин Иванов';
 
-const INIT_INSTRUCTIONS = [
-  { id: 'i1', name: 'Тех сбой', enabled: true,  text: 'При техническом сбое сообщай клиенту, что мы уже работаем над проблемой, и предлагай вернуться позже.' },
-  { id: 'i2', name: 'Выходные', enabled: false, text: 'Если сегодня суббота или воскресенье, то необходимо сообщать клиентам, что заказ будет сформирован в ближайший понедельник. До этого момента можно внести изменения в заказ без изменения срока доставки' },
-  { id: 'i3', name: 'Сбой в работе базы данных', enabled: false, text: 'При сбое базы данных извинись за временные неудобства и попроси повторить запрос через несколько минут.' },
-  { id: 'i4', name: 'Акция 1+1', enabled: true,  text: 'Сообщай клиентам про акцию 1+1 на все товары категории «Аксессуары» до конца месяца.' },
-  { id: 'i5', name: 'Неисправность оборудования на складе', enabled: false, text: 'При неисправности складского оборудования предупреждай о возможной задержке отгрузки на 1–2 дня.' },
-  { id: 'i6', name: 'Скидка 20% на все', enabled: true,  text: 'Информируй клиентов о скидке 20% на весь ассортимент по промокоду SALE20.' },
-  { id: 'i7', name: 'Бесплатная доставка от 3 000', enabled: true,  text: 'Сообщай, что доставка бесплатна при заказе от 3 000 рублей.' },
-];
+const INIT_INSTRUCTIONS = []; // на старте инструкций нет — показываем пустой экран
 
 const BLANK_SETTINGS = {
   botName: '', channels: [], assignees: [], transferText: '',
@@ -184,7 +176,7 @@ export default function App() {
   const [instructions,    setInstructions]    = useState(INIT_INSTRUCTIONS);
   const [instrEnabledOnly,setInstrEnabledOnly]= useState(false);
   const [instrSearch,     setInstrSearch]     = useState('');
-  const [expandedInstr,   setExpandedInstr]   = useState(new Set(['i2']));
+  const [expandedInstr,   setExpandedInstr]   = useState(new Set());
   const [drawer,          setDrawer]          = useState(null); // null | { id?, name, text } — панель создания/редактирования
   const [deleteInstr,     setDeleteInstr]     = useState(null); // id удаляемой инструкции
   const avatarInputRef = useRef(null);
@@ -511,7 +503,23 @@ export default function App() {
 
           {/* ── Content ── */}
           <div className={`content${activeTab === 'testing' ? ' content--chat' : ''}`}>
-            {activeTab === 'instructions' && (
+            {activeTab === 'instructions' && instructions.length === 0 && (
+              <div className="instr-empty-wrap">
+                <div className="instr-empty-card">
+                  <div className="instr-empty-card__info">
+                    <div className="instr-empty-card__title">У вас пока нет инструкций</div>
+                    <div className="instr-empty-card__text">
+                      Инструкции применяются сразу ко всем версиям бота и не влияют на общий лимит символов в базе материалов для обучения бота
+                    </div>
+                  </div>
+                  <button className="btn btn--primary" onClick={() => setDrawer({ name: '', text: '' })}>
+                    <Plus size={16} strokeWidth={2} /> Добавить инструкцию
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'instructions' && instructions.length > 0 && (
               <div className="instr-page">
                 {/* Title + toggle */}
                 <div className="training-head">
