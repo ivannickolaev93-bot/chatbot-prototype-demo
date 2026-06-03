@@ -5,7 +5,7 @@ import chatIllustration from './chat-illustration.png';
 import {
   Search, MessageCircle, Mail, Tag, IdCard, UserRound, CircleHelp,
   FileText, Inbox, Zap, Code2, Bot, ClipboardPen, Settings, Info,
-  Lock, X, BookOpen, MessageSquareText, BookText,
+  Lock, X, BookOpen, MessageSquareText, BookText, Camera, ChevronDown, Check,
 } from 'lucide-react';
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -81,6 +81,22 @@ const NAV_ITEMS = [
   { id: 'instructions', label: 'Особые инструкции', Icon: BookText,          showWhen: 'trained'  },
 ];
 
+const CHANNELS_OPTIONS = [
+  { id: 'ch1', label: 'Чат на сайте' },
+  { id: 'ch2', label: 'Telegram' },
+  { id: 'ch3', label: 'WhatsApp' },
+  { id: 'ch4', label: 'ВКонтакте' },
+  { id: 'ch5', label: 'Все каналы (полный доступ)' },
+];
+
+const ASSIGNEES_OPTIONS = [
+  { id: 'ag1', label: 'Смирнов Максим' },
+  { id: 'ag2', label: 'Петрова Анна' },
+  { id: 'ag3', label: 'Иванов Сергей' },
+  { id: 'gr1', label: 'Группа поддержки' },
+  { id: 'gr2', label: 'Первая линия' },
+];
+
 const INIT_MESSAGES = [];
 
 const BOT_REPLIES = [
@@ -143,6 +159,20 @@ export default function App() {
   const [trainedSnapshot, setTrainedSnapshot] = useState(null); // Set of article ids at training time
   const [updateHover,     setUpdateHover]     = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Settings state
+  const [botName,         setBotName]         = useState('');
+  const [channels,        setChannels]        = useState([]);
+  const [assignees,       setAssignees]       = useState([]);
+  const [transferText,    setTransferText]    = useState('');
+  const [botLaunched,     setBotLaunched]     = useState(false);
+  const [botEnabled,      setBotEnabled]      = useState(false);
+  const [settingsDirty,   setSettingsDirty]   = useState(false);
+  const [showChannelsDrop,setShowChannelsDrop]= useState(false);
+  const [showAssignDrop,  setShowAssignDrop]  = useState(false);
+  const [toast,           setToast]           = useState(null); // { text, type }
+  const avatarInputRef = useRef(null);
+  const [avatarUrl,       setAvatarUrl]       = useState(null);
   const [versionOpen,     setVersionOpen]     = useState(false);
   const [currentVersion,  setCurrentVersion]  = useState('v1');
   const fileInputRef = useRef(null);
@@ -205,6 +235,39 @@ export default function App() {
       setTimeout(() => setFiles(prev => prev.map(f => f.id === nf.id ? { ...f, status: 'uploaded' } : f)), 1200);
     });
     e.target.value = '';
+  }
+
+  function showToast(text, type = 'success') {
+    setToast({ text, type });
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  function launchBot() {
+    setBotLaunched(true);
+    setBotEnabled(true);
+    setSettingsDirty(false);
+    showToast('Бот запущен и работает');
+  }
+
+  function toggleBot() {
+    const next = !botEnabled;
+    setBotEnabled(next);
+    showToast(next ? 'Бот запущен и работает' : 'Бот остановлен');
+  }
+
+  function saveSettings() {
+    setSettingsDirty(false);
+    showToast('Настройки сохранены');
+  }
+
+  function handleAvatarChange(e) {
+    const file = e.target.files[0];
+    if (file) setAvatarUrl(URL.createObjectURL(file));
+  }
+
+  function toggleOption(list, setList, id) {
+    setList(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    setSettingsDirty(true);
   }
 
   const ver = BOT_VERSIONS.find(v => v.id === currentVersion);
@@ -302,9 +365,175 @@ export default function App() {
 
           {/* ── Content ── */}
           <div className={`content${activeTab === 'testing' ? ' content--chat' : ''}`}>
-            {(activeTab === 'settings' || activeTab === 'instructions') && (
-              <div className="tab-stub">
-                {{ settings: 'Настройки', instructions: 'Особые инструкции' }[activeTab]}
+            {activeTab === 'instructions' && (
+              <div className="tab-stub">Особые инструкции</div>
+            )}
+
+            {activeTab === 'settings' && (
+              <div className="settings-page">
+
+                {/* Main card */}
+                <div className="settings-card">
+
+                  {/* Profile block */}
+                  <div className="s-profile">
+                    {/* Avatar */}
+                    <div className="s-avatar" onClick={() => avatarInputRef.current.click()}>
+                      {avatarUrl
+                        ? <img src={avatarUrl} alt="avatar" className="s-avatar__img" />
+                        : <Bot size={28} color="#959696" strokeWidth={1.5} />
+                      }
+                      <div className="s-avatar__overlay"><Camera size={16} color="#fff" /></div>
+                      <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} />
+                    </div>
+
+                    {/* Name + status */}
+                    <div className="s-profile__info">
+                      <span className="s-profile__name">{botName || 'ИИ чат-бот'}</span>
+                      {botLaunched && (
+                        <span className={`s-status${botEnabled ? ' s-status--on' : ' s-status--off'}`}>
+                          {botEnabled ? 'Включен' : 'Выключен'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Launch button or toggle */}
+                    {!botLaunched ? (
+                      <button className="btn btn--primary" onClick={launchBot}>Запустить бота</button>
+                    ) : (
+                      <button
+                        className={`btn${botEnabled ? ' btn--danger' : ' btn--primary'}`}
+                        onClick={toggleBot}>
+                        {botEnabled ? 'Выключить' : 'Включить'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Form */}
+                  <div className="s-form">
+
+                    {/* Bot name */}
+                    <div className="s-field">
+                      <label className="s-label">Имя бота *</label>
+                      <input
+                        className="s-input"
+                        placeholder="Введите имя бота"
+                        value={botName}
+                        onChange={e => { setBotName(e.target.value); setSettingsDirty(true); }}
+                      />
+                    </div>
+
+                    {/* Channels */}
+                    <div className="s-field">
+                      <label className="s-label">Каналы, в которых будет отвечать чат-бот *</label>
+                      <div className="s-multiselect" onClick={() => setShowChannelsDrop(p => !p)}>
+                        <div className="s-multiselect__tags">
+                          {channels.length === 0
+                            ? <span className="s-placeholder">Выберите каналы</span>
+                            : channels.map(id => {
+                                const opt = CHANNELS_OPTIONS.find(o => o.id === id);
+                                return (
+                                  <span key={id} className="s-tag">
+                                    {opt?.label}
+                                    <button className="s-tag__rm" onClick={e => { e.stopPropagation(); toggleOption(channels, setChannels, id); }}>×</button>
+                                  </span>
+                                );
+                              })
+                          }
+                        </div>
+                        <ChevronDown size={16} color="#959696" />
+                        {showChannelsDrop && (
+                          <div className="s-dropdown" onClick={e => e.stopPropagation()}>
+                            {CHANNELS_OPTIONS.map(opt => {
+                              const sel = channels.includes(opt.id);
+                              return (
+                                <div key={opt.id}
+                                  className={`s-drop-item${sel ? ' s-drop-item--selected' : ''}`}
+                                  onClick={() => toggleOption(channels, setChannels, opt.id)}>
+                                  <Check size={16} strokeWidth={2}
+                                    color={sel ? '#3d79f2' : '#676768'}
+                                    style={{ opacity: sel ? 1 : 0 }} />
+                                  <span className="s-drop-item__text">{opt.label}</span>
+                                  <Check size={16} strokeWidth={2}
+                                    color={sel ? '#3d79f2' : '#676768'}
+                                    style={{ opacity: sel ? 1 : 0 }} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Assignees */}
+                    <div className="s-field">
+                      <label className="s-label">На кого назначать запросы *</label>
+                      <div className="s-multiselect" onClick={() => setShowAssignDrop(p => !p)}>
+                        <div className="s-multiselect__tags">
+                          {assignees.length === 0
+                            ? <span className="s-placeholder">Выберите исполнителей или группы</span>
+                            : assignees.map(id => {
+                                const opt = ASSIGNEES_OPTIONS.find(o => o.id === id);
+                                return (
+                                  <span key={id} className="s-tag">
+                                    {opt?.label}
+                                    <button className="s-tag__rm" onClick={e => { e.stopPropagation(); toggleOption(assignees, setAssignees, id); }}>×</button>
+                                  </span>
+                                );
+                              })
+                          }
+                        </div>
+                        <ChevronDown size={16} color="#959696" />
+                        {showAssignDrop && (
+                          <div className="s-dropdown" onClick={e => e.stopPropagation()}>
+                            {ASSIGNEES_OPTIONS.map(opt => {
+                              const sel = assignees.includes(opt.id);
+                              return (
+                                <div key={opt.id}
+                                  className={`s-drop-item${sel ? ' s-drop-item--selected' : ''}`}
+                                  onClick={() => toggleOption(assignees, setAssignees, opt.id)}>
+                                  <Check size={16} strokeWidth={2}
+                                    color={sel ? '#3d79f2' : '#676768'}
+                                    style={{ opacity: sel ? 1 : 0 }} />
+                                  <span className="s-drop-item__text">{opt.label}</span>
+                                  <Check size={16} strokeWidth={2}
+                                    color={sel ? '#3d79f2' : '#676768'}
+                                    style={{ opacity: sel ? 1 : 0 }} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Transfer text */}
+                    <div className="s-field">
+                      <label className="s-label">Текст при переводе на оператора</label>
+                      <div className="s-textarea-wrap">
+                        <textarea
+                          className="s-textarea"
+                          placeholder="Введите свой текст"
+                          maxLength={1000}
+                          value={transferText}
+                          onChange={e => { setTransferText(e.target.value); setSettingsDirty(true); }}
+                        />
+                        <span className="s-textarea__counter">{transferText.length}/1000</span>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Save button */}
+                <div className="settings-actions">
+                  <button
+                    className={`btn${settingsDirty ? ' btn--primary' : ' btn--save-disabled'}`}
+                    onClick={settingsDirty ? saveSettings : undefined}
+                    disabled={!settingsDirty}>
+                    Сохранить
+                  </button>
+                </div>
               </div>
             )}
 
@@ -649,6 +878,10 @@ export default function App() {
         </div>
       </div>
 
+      {/* Toast */}
+      {toast && (
+        <div className={`toast toast--${toast.type}`}>{toast.text}</div>
+      )}
     </div>
   );
 }
