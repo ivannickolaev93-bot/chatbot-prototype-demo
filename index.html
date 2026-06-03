@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Чат-бот — Обучение</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f5f5; color: #222427; font-size: 14px; }
+
+    .app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── Global sidebar — точный SVG из Design System Figma ── */
+    .sidebar { width: 56px; flex-shrink: 0; overflow: hidden; background: #313640; }
+    .sidebar img { display: block; width: 56px; }
+
+    /* ── Main ── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Page header ── */
+    .page-header { height: 64px; background: #fff; border-bottom: 1px solid #e8e8e8; display: flex; align-items: center; padding: 0 20px; justify-content: space-between; flex-shrink: 0; }
+    .page-header-left { display: flex; align-items: center; gap: 10px; }
+    .page-title { font-size: 16px; font-weight: 600; color: #222427; }
+    .version-btn { display: flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid #d0d1d2; border-radius: 6px; background: #fff; cursor: pointer; font-size: 12px; color: #555; }
+    .version-btn svg { width: 12px; height: 12px; }
+    .page-header-right { display: flex; align-items: center; gap: 10px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #7b9ee8, #4a6ac8); }
+
+    /* ── Content layout ── */
+    .content-area { flex: 1; display: flex; overflow: hidden; background: #f4f5f5; }
+
+    /* ── Bot nav tabs ── */
+    .bot-nav { width: 220px; background: #fff; border-right: 1px solid #e8e8e8; flex-shrink: 0; padding-top: 4px; }
+    .bot-nav-item { padding: 12px 20px; cursor: pointer; font-size: 13px; color: #555; display: flex; align-items: center; gap: 8px; border-left: 3px solid transparent; }
+    .bot-nav-item:hover { background: #f8f8f8; }
+    .bot-nav-item.active { color: #4a73e8; font-weight: 500; border-left-color: #4a73e8; background: #f0f4ff; }
+    .bot-nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+    /* ── Training page ── */
+    .training-page { flex: 1; overflow-y: auto; padding: 24px 0; display: flex; justify-content: center; }
+    .training-content { width: 720px; display: flex; flex-direction: column; gap: 12px; }
+
+    /* Section title row */
+    .training-header { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
+    .training-title { font-size: 15px; font-weight: 600; color: #222427; }
+    .switcher { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+    .switch-track { width: 28px; height: 16px; border-radius: 8px; background: #c8c8c8; position: relative; transition: background .2s; flex-shrink: 0; }
+    .switch-track.on { background: #4a73e8; }
+    .switch-thumb { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: left .2s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+    .switch-track.on .switch-thumb { left: 14px; }
+    .switch-label { font-size: 12px; color: #666; }
+
+    /* ── KB accordion ── */
+    .kb-block { background: #fff; border: 1px solid #e4e4e4; border-radius: 8px; overflow: hidden; }
+    .kb-section-header { display: flex; align-items: center; justify-content: space-between; padding: 13px 20px; cursor: pointer; border-bottom: 1px solid transparent; }
+    .kb-section-header:hover { background: #fafafa; }
+    .kb-section-header.open { border-bottom-color: #e8e8e8; }
+    .kb-section-name { font-size: 13px; font-weight: 500; color: #222427; }
+    .kb-section-right { display: flex; align-items: center; gap: 8px; }
+    .kb-section-status { font-size: 12px; color: #aaa; }
+    .kb-section-status.selected { color: #4a73e8; }
+    .chevron-icon { color: #aaa; transition: transform .2s; display: flex; }
+    .chevron-icon.up { transform: rotate(180deg); }
+    .chevron-icon svg { width: 14px; height: 14px; }
+
+    /* Expanded BZ content */
+    .bz-content { padding: 12px 20px 16px; }
+    .search-wrap { position: relative; margin-bottom: 12px; }
+    .search-input { width: 100%; padding: 8px 12px 8px 34px; border: 1px solid #d8d8d8; border-radius: 6px; font-size: 13px; color: #222427; outline: none; background: #fff; }
+    .search-input:focus { border-color: #4a73e8; }
+    .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #aaa; display: flex; }
+    .search-icon svg { width: 14px; height: 14px; }
+
+    .select-all-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; margin-bottom: 4px; }
+    .total-chars { font-size: 12px; color: #aaa; margin-left: auto; white-space: nowrap; }
+
+    .checkbox { width: 16px; height: 16px; border: 1.5px solid #c8c8c8; border-radius: 3px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; background: #fff; }
+    .checkbox.checked { background: #4a73e8; border-color: #4a73e8; }
+    .checkbox.indeterminate { background: #4a73e8; border-color: #4a73e8; }
+    .checkbox.checked svg, .checkbox.indeterminate svg { display: block; }
+    .checkbox svg { display: none; width: 10px; height: 10px; }
+
+    /* ── Tree rows: Раздел → Категория → Статья ── */
+    .tree-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f2f2f2; cursor: pointer; }
+    .tree-row:last-child { border-bottom: none; }
+    .tree-row:hover { background: #fafcff; border-radius: 4px; }
+
+    /* Раздел (level 1) */
+    .section-row { padding-left: 0; }
+    .section-label { font-size: 10px; color: #aaa; letter-spacing: 0.3px; margin-bottom: 1px; }
+    .section-name { font-size: 13px; font-weight: 500; color: #222427; }
+    .row-right { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
+    .row-chars { font-size: 12px; color: #888; white-space: nowrap; }
+    .row-chevron { color: #bbb; display: flex; transition: transform .15s; }
+    .row-chevron.open { transform: rotate(180deg); }
+    .row-chevron svg { width: 13px; height: 13px; }
+
+    /* Категория (level 2, indented 24px) */
+    .category-block { padding-left: 24px; }
+    .category-name { font-size: 13px; color: #222427; }
+
+    /* Статья (level 3, indented 48px) */
+    .article-block { padding-left: 48px; }
+    .article-name { font-size: 13px; color: #4a73e8; }
+    .lock-icon { color: #bbb; display: flex; flex-shrink: 0; }
+    .lock-icon svg { width: 13px; height: 13px; }
+
+    /* ── Testing page ── */
+    .testing-page { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #f4f5f5; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 20px 0; display: flex; flex-direction: column; gap: 4px; }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 2px; }
+
+    /* Сообщение — общий контейнер */
+    .msg-row { display: flex; align-items: flex-end; gap: 10px; padding: 4px 24px; max-width: 100%; }
+    .msg-row.user { flex-direction: row-reverse; }
+    .msg-row.bot { flex-direction: row; }
+
+    /* Аватар */
+    .msg-avatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #fff; }
+    .msg-avatar.bot-av { background: linear-gradient(135deg, #4a73e8, #3060bf); }
+    .msg-avatar.user-av { background: linear-gradient(135deg, #7b9ee8, #4a6ac8); }
+
+    /* Пузырь */
+    .msg-bubble { max-width: 620px; background: #fff; border-radius: 8px; padding: 10px 14px 8px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+    .msg-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .msg-sender { font-size: 12px; font-weight: 600; }
+    .msg-sender.bot { color: #4a73e8; }
+    .msg-sender.user { color: #222427; }
+    .msg-time { font-size: 11px; color: #aaa; }
+    .msg-text { font-size: 13px; color: #38393a; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+
+    /* Инпут */
+    .chat-input-wrap { padding: 16px 24px; background: #f4f5f5; flex-shrink: 0; }
+    .chat-input-box { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 8px; padding: 8px 8px 8px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .chat-input { flex: 1; border: none; outline: none; font-size: 13px; color: #38393a; background: transparent; resize: none; font-family: inherit; }
+    .chat-input::placeholder { color: #bbb; }
+    .btn-send { padding: 8px 18px; background: #3d79f2; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+    .btn-send:hover { background: #2d69e2; }
+    .btn-send:disabled { background: #c8c8c8; cursor: default; }
+
+    /* ── Лоадер и заглушка тестирования ── */
+    .chat-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; }
+
+    /* Лоадер: 320×320, r:16, из Figma */
+    .loader-card { background: #fff; border-radius: 16px; width: 320px; height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    .spinner { width: 120px; height: 120px; border-radius: 50%; border: 8px solid #e8e8e8; border-top-color: #3d79f2; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text { font-size: 14px; color: #222427; font-weight: 500; text-align: center; }
+
+    /* ── Настройки ── */
+    .settings-page { flex: 1; overflow: visible; display: flex; justify-content: center; padding: 24px 0; background: #f4f5f5; }
+    .settings-card { width: 662px; background: #fff; border-radius: 8px; padding: 24px; display: flex; flex-direction: column; gap: 24px; align-self: flex-start; }
+
+    /* Профиль бота */
+    .bot-profile { display: flex; align-items: center; gap: 16px; }
+    .bot-avatar-wrap { position: relative; width: 48px; height: 48px; flex-shrink: 0; cursor: pointer; }
+    .bot-avatar { width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #4a73e8, #3060bf); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; font-weight: 600; }
+    .bot-avatar-edit { position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; }
+    .bot-avatar-wrap:hover .bot-avatar-edit { opacity: 1; }
+    .bot-avatar-edit svg { width: 16px; height: 16px; color: #fff; }
+    .bot-info { flex: 1; }
+    .bot-name-display { font-size: 16px; color: #222427; margin-bottom: 2px; }
+    .bot-status { font-size: 14px; color: #676768; display: flex; align-items: center; gap: 6px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #05be23; flex-shrink: 0; }
+    .status-dot.off { background: #c8c8c8; }
+    .bot-actions { display: flex; align-items: center; gap: 8px; }
+    .btn-stop { padding: 10px 16px; background: #ffeaec; color: #db1436; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; white-space: nowrap; }
+    .btn-stop:hover { background: #ffd6da; }
+    .btn-enable { padding: 10px 16px; background: #3d79f2; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; white-space: nowrap; }
+    .btn-enable:hover { background: #2d69e2; }
+
+    /* Дропдаун версий */
+    .versions-wrap { position: relative; }
+    .versions-dropdown { position: fixed; width: 280px; background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; box-shadow: 0 4px 24px rgba(0,0,0,.15); z-index: 9999; max-height: 320px; overflow-y: auto; }
+    .version-cell { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #f3f3f3; border-bottom: 1px solid #e8e8e8; cursor: pointer; }
+    .version-cell:last-child { border-bottom: none; }
+    .version-cell:hover { background: #eaeaea; }
+    .version-indicator { width: 8px; height: 8px; border-radius: 50%; background: #05be23; flex-shrink: 0; }
+    .version-indicator.inactive { background: transparent; }
+    .version-body { flex: 1; min-width: 0; }
+    .version-name { font-size: 13px; font-weight: 500; color: #222427; margin-bottom: 2px; }
+    .version-date { font-size: 12px; color: #959696; margin-bottom: 2px; }
+    .version-author { font-size: 12px; color: #959696; display: flex; align-items: center; gap: 4px; }
+    .version-check { flex-shrink: 0; }
+    .version-check svg { width: 14px; height: 14px; }
+    .btn-start-bot { padding: 10px 16px; background: #4a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; white-space: nowrap; }
+    .btn-start-bot:hover { background: #3060bf; }
+    .btn-start-bot:disabled { background: #959696; cursor: default; }
+    .btn-start-bot:disabled:hover { background: #959696; }
+    .btn-icon { width: 40px; height: 40px; background: #f4f5f5; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #555; }
+    .btn-icon:hover { background: #e8e8e8; }
+
+    /* Toggle вкл/выкл */
+    .toggle-wrap { display: flex; align-items: center; gap: 10px; }
+    .toggle-track { width: 36px; height: 20px; border-radius: 10px; background: #c8c8c8; position: relative; cursor: pointer; transition: background .2s; flex-shrink: 0; }
+    .toggle-track.on { background: #05be23; }
+    .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+    .toggle-track.on .toggle-thumb { left: 18px; }
+    .toggle-label { font-size: 14px; color: #222427; }
+    .toggle-label.off { color: #db1436; }
+    .toggle-track.off-track { background: #ffeaec; }
+    .toggle-track.off-track .toggle-thumb { background: #db1436; }
+
+    /* Форма */
+    .form-fields { display: flex; flex-direction: column; gap: 16px; }
+    .field-wrap { display: flex; flex-direction: column; gap: 6px; }
+    .field-label { font-size: 14px; color: #505051; }
+    .field-input { width: 100%; padding: 10px 12px; border: 1px solid #d8d8d8; border-radius: 6px; font-size: 14px; color: #38393a; outline: none; background: #fff; font-family: inherit; }
+    .field-input:focus { border-color: #4a73e8; }
+    .field-textarea { width: 100%; padding: 10px 12px; border: 1px solid #d8d8d8; border-radius: 6px; font-size: 14px; color: #38393a; outline: none; background: #fff; font-family: inherit; resize: vertical; min-height: 90px; }
+    .field-textarea:focus { border-color: #4a73e8; }
+    .field-counter { font-size: 12px; color: #aaa; text-align: right; margin-top: 2px; }
+    .field-error { font-size: 12px; color: #db1436; margin-top: 4px; }
+    .multiselect-box.error { border-color: #db1436; }
+    .field-input.error { border-color: #db1436; }
+    .req { color: #db1436; }
+
+    /* Мульти-селект с тегами */
+    .multiselect { position: relative; }
+    .multiselect-box { min-height: 40px; padding: 6px 10px; border: 1px solid #d8d8d8; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; cursor: pointer; background: #fff; }
+    .multiselect-box:focus-within, .multiselect-box.open { border-color: #4a73e8; }
+    .tag-chip { display: flex; align-items: center; gap: 4px; background: #ebebec; border-radius: 4px; padding: 2px 8px; font-size: 13px; color: #222427; white-space: nowrap; }
+    .tag-chip button { background: none; border: none; cursor: pointer; color: #888; font-size: 14px; line-height: 1; padding: 0 0 0 2px; }
+    .tag-chip button:hover { color: #e8253a; }
+    .multiselect-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1px solid #d8d8d8; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.12); z-index: 50; max-height: 200px; overflow-y: auto; }
+    .dropdown-item { padding: 9px 14px; font-size: 13px; color: #222427; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    .dropdown-item:hover { background: #f4f5f5; }
+    .dropdown-item.selected { color: #4a73e8; }
+
+    /* Toast-уведомление (из Figma: bg #e6f9e9, r:8, полоска #05be23) */
+    .toast { position: fixed; top: 24px; right: 24px; width: 320px; background: #e6f9e9; border-radius: 8px; padding: 14px 16px 18px; z-index: 200; animation: fadeInDown .25s ease; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+    .toast-inner { display: flex; align-items: center; gap: 10px; }
+    .toast-icon { font-size: 20px; flex-shrink: 0; }
+    .toast-text { flex: 1; font-size: 14px; color: #38393a; line-height: 1.4; }
+    .toast-close { background: none; border: none; cursor: pointer; color: #888; font-size: 18px; line-height: 1; padding: 0; flex-shrink: 0; }
+    .toast-close:hover { color: #555; }
+    .toast-bar { position: absolute; bottom: 0; left: 0; height: 4px; background: #05be23; border-radius: 0 0 0 8px; animation: shrink 3s linear forwards; }
+    @keyframes shrink { from { width: 100%; } to { width: 0%; } }
+    @keyframes fadeInDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Заглушка после обучения */
+    .placeholder-card { background: #fff; border-radius: 16px; width: 400px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 24px rgba(0,0,0,.08); padding-bottom: 28px; overflow: hidden; }
+    .placeholder-illustration { width: 352px; height: 263px; display: block; margin: 24px auto 0; }
+    .placeholder-text-wrap { padding: 16px 28px 0; text-align: center; }
+    .placeholder-title { font-size: 16px; font-weight: 600; color: #222427; margin-bottom: 8px; }
+    .placeholder-desc { font-size: 14px; color: #676768; line-height: 1.5; }
+
+    /* ── Files section ── */
+    .files-section { background: #fff; border: 1px solid #e4e4e4; border-radius: 8px; padding: 14px 20px; }
+    .files-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .files-left .files-title { font-size: 13px; font-weight: 500; color: #222427; margin-bottom: 2px; }
+    .files-left .files-formats { font-size: 11px; color: #aaa; }
+    .btn-add-file { background: none; border: none; color: #4a73e8; font-size: 13px; cursor: pointer; white-space: nowrap; padding: 0; font-weight: 500; }
+    .btn-add-file:hover { text-decoration: underline; }
+    .file-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .file-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #f8f8f8; border-radius: 6px; }
+    .file-item-name { flex: 1; font-size: 12px; color: #333; }
+    .file-remove { background: none; border: none; cursor: pointer; color: #aaa; font-size: 18px; line-height: 1; padding: 0 2px; }
+    .file-remove:hover { color: #e8253a; }
+    .btn-send-files { margin-top: 10px; padding: 7px 14px; background: #4a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+
+    /* ── Counter section ── */
+    .counter-section { background: #fff; border: 1px solid #e4e4e4; border-radius: 8px; padding: 14px 20px; }
+    .counter-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .counter-label { font-size: 13px; font-weight: 500; color: #222427; }
+    .counter-value { font-size: 13px; color: #4a73e8; font-weight: 500; }
+    .progress-bar { height: 6px; background: #e8e8e8; border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #4a73e8; border-radius: 3px; transition: width .3s; }
+
+    /* ── Action buttons ── */
+    .action-row { display: flex; align-items: center; gap: 12px; position: relative; padding-bottom: 8px; }
+    .btn-train { padding: 10px 20px; background: #4a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; }
+    .btn-train:disabled { background: #c0c8d8; cursor: default; }
+    .btn-reset { padding: 10px 16px; background: none; border: none; color: #888; cursor: pointer; font-size: 13px; border-radius: 6px; }
+    .btn-reset:hover { background: #f0f0f0; }
+
+    /* Tooltip above button, arrow pointing down */
+    .tooltip-anchor { position: relative; display: inline-block; }
+    .tooltip-box {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 0;
+      background: #2b2f38;
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.5;
+      padding: 10px 14px;
+      border-radius: 8px;
+      width: 300px;
+      z-index: 20;
+      pointer-events: none;
+    }
+    .tooltip-box::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 22px;
+      border: 6px solid transparent;
+      border-top-color: #2b2f38;
+    }
+
+    /* ── Modal ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal { background: #fff; border-radius: 12px; padding: 28px 24px; width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+    .modal-title { font-size: 16px; font-weight: 600; color: #222427; margin-bottom: 8px; }
+    .modal-desc { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 22px; }
+    .modal-actions { display: flex; gap: 10px; }
+    .btn-modal-secondary { flex: 1; padding: 10px; background: #f0f0f0; color: #222427; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+    .btn-modal-secondary:hover { background: #e4e4e4; }
+    .btn-modal-primary { flex: 1; padding: 10px; background: #4a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+    .btn-modal-primary:hover { background: #3a63d8; }
+
+    /* Divider between KB sections */
+    .kb-section-divider { border: none; border-top: 1px solid #f0f0f0; margin: 0; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef } = React;
+
+/* ── SVG helpers ── */
+const SvgIcon = ({ children, size = 20, ...props }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor"
+    strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    {children}
+  </svg>
+);
+const ChevronDown = ({ size = 14 }) => <SvgIcon size={size}><polyline points="6 9 12 15 18 9"/></SvgIcon>;
+const Check = () => (
+  <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+const SearchIcon = ({ size = 14 }) => (
+  <SvgIcon size={size}><circle cx="11" cy="11" r="6"/><line x1="17" y1="17" x2="21" y2="21"/></SvgIcon>
+);
+const FileIcon = ({ size = 14 }) => (
+  <SvgIcon size={size}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></SvgIcon>
+);
+
+/* ── Data — 3 уровня: БЗ → Раздел → Категория → Статьи ── */
+const KB_SECTIONS = [
+  {
+    id: 'bz1', name: 'БЗ №1', totalChars: 115555,
+    sections: [
+      {
+        id: 's1', name: 'Покупателю', chars: 1437,
+        categories: [
+          {
+            id: 'c1', name: 'Для продаж', chars: 1437,
+            articles: [
+              { id: 'a1', name: 'порядок обработки лидов копия', chars: 9, locked: false },
+              { id: 'a2', name: 'порядок обработки лидов', chars: 11, locked: true },
+              { id: 'a3', name: 'ааа', chars: 10, locked: true },
+              { id: 'a4', name: 'Цепочка правил', chars: 1407, locked: true },
+            ]
+          },
+        ]
+      },
+      {
+        id: 's2', name: 'Подключение каналов', chars: 10000,
+        categories: [
+          {
+            id: 'c2', name: 'Мессенджеры', chars: 4500,
+            articles: [
+              { id: 'a5', name: 'Подключение Telegram', chars: 2100, locked: false },
+              { id: 'a6', name: 'Подключение WhatsApp', chars: 2400, locked: false },
+            ]
+          },
+          {
+            id: 'c3', name: 'Email', chars: 5500,
+            articles: [
+              { id: 'a7', name: 'Настройка почтового ящика', chars: 3200, locked: false },
+              { id: 'a8', name: 'SMTP настройки', chars: 2300, locked: true },
+            ]
+          },
+        ]
+      },
+      {
+        id: 's3', name: 'Работа с обращениями', chars: 35000,
+        categories: [
+          {
+            id: 'c4', name: 'Статусы тикетов', chars: 12000,
+            articles: [
+              { id: 'a9', name: 'Жизненный цикл тикета', chars: 5000, locked: false },
+              { id: 'a10', name: 'Автозакрытие', chars: 7000, locked: false },
+            ]
+          },
+        ]
+      },
+    ]
+  },
+  { id: 'integr', name: 'Интеграции', totalChars: 0, sections: [] },
+  { id: 'test', name: 'Тест', totalChars: 0, sections: [] },
+  { id: 'spec', name: 'Специально для бота', totalChars: 0, sections: [] },
+  { id: 'role', name: 'Управление ролевой моделью', totalChars: 0, sections: [] },
+  { id: 'doc', name: 'Документооборот', totalChars: 0, sections: [] },
+  { id: 'staff', name: 'Для сотрудников', totalChars: 0, sections: [] },
+  { id: 'other', name: 'Прочее', totalChars: 0, sections: [] },
+];
+
+const BOT_TABS = ['Настройки', 'Обучение', 'Тестирование', 'Особые инструкции'];
+
+// Тестирование начинается с пустого чата — заглушка показывается до первого сообщения
+
+const LockIcon = () => (
+  <SvgIcon size={13}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></SvgIcon>
+);
+
+function CB({ checked, indeterminate, onChange }) {
+  return (
+    <div
+      className={`checkbox ${checked ? 'checked' : indeterminate ? 'indeterminate' : ''}`}
+      onClick={e => { e.stopPropagation(); onChange(); }}
+    >
+      {(checked || indeterminate) && (
+        indeterminate && !checked
+          ? <svg viewBox="0 0 10 10" width="10" height="10"><rect x="1" y="4" width="8" height="2" fill="#fff" rx="1"/></svg>
+          : <Check />
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [activeTab, setActiveTab] = useState('Обучение');
+  const [publicOnly, setPublicOnly] = useState(false);
+  const [expanded, setExpanded] = useState({ bz: { bz1: true }, section: {}, category: {} });
+  const [selected, setSelected] = useState({}); // articleId → bool
+  const [trainedSelected, setTrainedSelected] = useState(null);
+  const [trainedFiles, setTrainedFiles] = useState(null);
+
+  // Настройки бота
+  const [botName, setBotName] = useState('');
+  const [transferText, setTransferText] = useState('');
+  const [channels, setChannels] = useState([]);
+  const [executors, setExecutors] = useState([]);
+  const [errors, setErrors] = useState({});
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const [botLaunched, setBotLaunched] = useState(false);
+  const [botRunning, setBotRunning] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [versions, setVersions] = useState([]);
+  const [activeVersion, setActiveVersion] = useState(null);
+  const [showVersions, setShowVersions] = useState(false);
+  const [versionsPos, setVersionsPos] = useState({ top: 0, right: 0 });
+  const versionsBtnRef = useRef(null);
+  const [toast, setToast] = useState(null);
+  // idle | loading | ready
+  const [trainingState, setTrainingState] = useState('idle');
+  const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const messagesEndRef = useRef(null);
+  const [files, setFiles] = useState([]);
+  const [modal, setModal] = useState(null);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const fileInputRef = useRef();
+
+  const toggle = (level, id) => setExpanded(prev => ({
+    ...prev, [level]: { ...prev[level], [id]: !prev[level][id] }
+  }));
+
+  const setArticle = (id, val) => setSelected(prev => ({ ...prev, [id]: val }));
+  const allSel = (ids) => ids.length > 0 && ids.every(id => selected[id]);
+  const anySel = (ids) => ids.some(id => selected[id]);
+  const toggleAll = (ids) => {
+    const val = !allSel(ids);
+    setSelected(prev => { const n = { ...prev }; ids.forEach(id => n[id] = val); return n; });
+  };
+
+  const totalSelectedChars = KB_SECTIONS.flatMap(bz => bz.sections || [])
+    .flatMap(s => s.categories || []).flatMap(c => c.articles)
+    .filter(a => selected[a.id]).reduce((sum, a) => sum + a.chars, 0);
+
+  const maxChars = 150000;
+  const fileChars = files.reduce((sum, f) => sum + (f.size ? Math.round(f.size * 1.5) : 5000), 0);
+  const totalChars = totalSelectedChars + fileChars;
+  const totalSelectedCount = Object.values(selected).filter(Boolean).length;
+  const hasContent = totalSelectedCount > 0 || files.length > 0;
+
+  // Для дообучения: активна только если выбор изменился относительно снимка
+  const hasNewContent = (() => {
+    if (trainingState !== 'ready') return hasContent;
+    if (!trainedSelected) return hasContent;
+    const currentIds = Object.keys(selected).filter(id => selected[id]).sort().join(',');
+    const trainedIds = Object.keys(trainedSelected).filter(id => trainedSelected[id]).sort().join(',');
+    const currentFileNames = files.map(f => f.name).sort().join(',');
+    const trainedFileNames = (trainedFiles || []).map(f => f.name).sort().join(',');
+    return currentIds !== trainedIds || currentFileNames !== trainedFileNames;
+  })();
+
+  const handleReset = () => { setFiles([]); setSelected({}); };
+
+  function handleTrain() {
+    setModal(null);
+    setActiveTab('Тестирование');
+    setTrainingState('loading');
+    setMessages([]);
+    const snapSelected = { ...selected };
+    const snapFiles = [...files];
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+    setTimeout(() => {
+      setTrainingState('ready');
+      setTrainedSelected(snapSelected);
+      setTrainedFiles(snapFiles);
+      setVersions(prev => {
+        const newVer = { id: prev.length + 1, date: dateStr, time: timeStr };
+        return [...prev, newVer];
+      });
+      setActiveVersion(v => (v || 0) + 1);
+    }, 4000);
+  }
+
+  function showToast(msg) {
+    setToast(null);
+    setTimeout(() => { setToast(msg); setTimeout(() => setToast(null), 3000); }, 10);
+  }
+
+  function launchBot() {
+    setBotLaunched(true);
+    setBotRunning(true);
+    showToast('Бот успешно запущен');
+  }
+
+  function toggleBot() {
+    setBotRunning(v => {
+      showToast(!v ? 'Бот успешно запущен' : 'Бот остановлен');
+      return !v;
+    });
+  }
+
+  const ALL_CHANNELS = ['Все каналы (полный доступ)', 'Telegram', 'WhatsApp', 'Email', 'ВКонтакте', 'Онлайн-чат'];
+  const ALL_EXECUTORS = ['Агенты первой линии (группа)', 'Смирнов Максим', 'Ситникова Елена', 'Козлов Андрей', 'Поддержка (группа)'];
+
+  function handleTrainClick() {
+    handleTrain();
+  }
+
+  const { useEffect } = React;
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+
+  function sendMessage() {
+    const text = inputText.trim();
+    if (!text) return;
+    const now = new Date().toLocaleString('ru', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const userMsg = { id: Date.now(), from: 'user', sender: 'Вы', time: now, text };
+    setMessages(prev => [...prev, userMsg]);
+    setInputText('');
+    setTimeout(() => {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, from: 'bot', sender: 'Чат-бот', time: now,
+        text: 'Спасибо за ваш вопрос! Это демонстрационный режим тестирования бота. В реальной версии здесь будет ответ обученного чат-бота.'
+      }]);
+    }, 800);
+  }
+
+  return (
+    <div className="app">
+      <div className="sidebar">
+        <img src="sidebar-minimized.svg" alt="sidebar" width="56" />
+      </div>
+
+      <div className="main">
+        <div className="page-header">
+          <div className="page-header-left">
+            <span className="page-title">Чат-бот первой линии</span>
+            {versions.length >= 1 ? (
+              <div style={{ position: 'relative' }}>
+                <button className="version-btn" onClick={() => setShowVersions(v => !v)}>
+                  • Версия {activeVersion} <ChevronDown size={12} />
+                </button>
+                {showVersions && (
+                  <div className="versions-dropdown" style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, minWidth: 280 }}>
+                    {[...versions].reverse().map(ver => {
+                      const isActive = ver.id === activeVersion;
+                      return (
+                        <div key={ver.id} className="version-cell" onClick={() => { setActiveVersion(ver.id); setShowVersions(false); }}>
+                          <span className={`version-indicator ${isActive ? '' : 'inactive'}`} />
+                          <div className="version-body">
+                            <div className="version-name">Версия {ver.id}</div>
+                            <div className="version-date">Создана {ver.date}, {ver.time}</div>
+                            <div className="version-author">
+                              <SvgIcon size={12}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></SvgIcon>
+                              Константин Иванов
+                            </div>
+                          </div>
+                          {isActive && (
+                            <span style={{ color: '#3d79f2', display: 'flex' }}>
+                              <SvgIcon size={14}><polyline points="20 6 9 17 4 12"/></SvgIcon>
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button className="version-btn">• Версия 1 <ChevronDown size={12} /></button>
+            )}
+          </div>
+          <div className="page-header-right"><div className="avatar" /></div>
+        </div>
+
+        <div className="content-area">
+          <div className="bot-nav">
+            {BOT_TABS
+              .filter(tab => {
+                if (tab === 'Обучение') return true;
+                if (tab === 'Тестирование') return trainingState === 'loading' || trainingState === 'ready';
+                return trainingState === 'ready';
+              })
+              .map(tab => (
+                <div key={tab} className={`bot-nav-item ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>{tab}</div>
+              ))}
+          </div>
+
+          {activeTab === 'Обучение' && (
+            <div className="training-page">
+              <div className="training-content">
+
+                <div className="training-header">
+                  <span className="training-title">Материалы для обучения бота</span>
+                  <div className="switcher" onClick={() => setPublicOnly(v => !v)}>
+                    <div className={`switch-track ${publicOnly ? 'on' : ''}`}><div className="switch-thumb" /></div>
+                    <span className="switch-label">Показывать только публичные</span>
+                  </div>
+                </div>
+
+                {/* KB accordion — только просмотр, без влияния на обучение */}
+                <div className="kb-block">
+                  {KB_SECTIONS.map((bz, bzIdx) => {
+                    const bzExpanded = !!expanded.bz[bz.id];
+                    return (
+                      <div key={bz.id}>
+                        {bzIdx > 0 && <hr className="kb-section-divider" />}
+                        <div className={`kb-section-header ${bzExpanded ? 'open' : ''}`} onClick={() => toggle('bz', bz.id)}>
+                          <span className="kb-section-name">{bz.name}</span>
+                          <div className="kb-section-right">
+                            {!bzExpanded && <span className="kb-section-status">Статьи не выбраны</span>}
+                            <span className={`chevron-icon ${bzExpanded ? 'up' : ''}`}><ChevronDown size={14} /></span>
+                          </div>
+                        </div>
+
+                        {bzExpanded && (
+                          <div className="bz-content">
+                            <div className="search-wrap">
+                              <span className="search-icon"><SearchIcon /></span>
+                              <input className="search-input" placeholder="Поиск по названию раздела, категории или статьи" />
+                            </div>
+                            {(() => {
+                              const bzIds = (bz.sections||[]).flatMap(s=>s.categories.flatMap(c=>c.articles.map(a=>a.id)));
+                              return (
+                                <div className="select-all-row">
+                                  <CB checked={allSel(bzIds)} indeterminate={anySel(bzIds)&&!allSel(bzIds)} onChange={()=>toggleAll(bzIds)} />
+                                  <span style={{fontSize:13,color:'#333'}}>Выбрать все</span>
+                                  <span className="total-chars">Всего символов в базе знаний: {(bz.totalChars||0).toLocaleString('ru')}</span>
+                                </div>
+                              );
+                            })()}
+
+                            {(bz.sections || []).length === 0 && (
+                              <div style={{ color: '#aaa', fontSize: 13, padding: '10px 0' }}>Нет статей</div>
+                            )}
+
+                            {(bz.sections || []).map(sec => {
+                              const secIds = sec.categories.flatMap(c => c.articles.map(a => a.id));
+                              const secExpanded = !!expanded.section[sec.id];
+                              return (
+                                <div key={sec.id}>
+                                  <div className="tree-row section-row" onClick={() => toggle('section', sec.id)}>
+                                    <CB checked={allSel(secIds)} indeterminate={anySel(secIds) && !allSel(secIds)} onChange={() => toggleAll(secIds)} />
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div className="section-label">Раздел</div>
+                                      <div className="section-name">{sec.name}</div>
+                                    </div>
+                                    <div className="row-right">
+                                      <span className="row-chars">Всего {sec.chars.toLocaleString('ru')} символов</span>
+                                      <span className={`row-chevron ${secExpanded ? 'open' : ''}`}><ChevronDown size={13} /></span>
+                                    </div>
+                                  </div>
+
+                                  {secExpanded && sec.categories.map(cat => {
+                                    const catIds = cat.articles.map(a => a.id);
+                                    const catExpanded = !!expanded.category[cat.id];
+                                    return (
+                                      <div key={cat.id}>
+                                        <div className="tree-row" style={{ paddingLeft: 24 }} onClick={() => toggle('category', cat.id)}>
+                                          <CB checked={allSel(catIds)} indeterminate={anySel(catIds) && !allSel(catIds)} onChange={() => toggleAll(catIds)} />
+                                          <span className="category-name" style={{ flex: 1 }}>{cat.name}</span>
+                                          <div className="row-right">
+                                            <span className="row-chars">{cat.chars.toLocaleString('ru')}</span>
+                                            <span className={`row-chevron ${catExpanded ? 'open' : ''}`}><ChevronDown size={13} /></span>
+                                          </div>
+                                        </div>
+
+                                        {catExpanded && cat.articles.map(article => (
+                                          <div key={article.id} className="tree-row" style={{ paddingLeft: 48 }} onClick={() => setArticle(article.id, !selected[article.id])}>
+                                            <CB checked={!!selected[article.id]} indeterminate={false} onChange={() => setArticle(article.id, !selected[article.id])} />
+                                            <span className="article-name" style={{ flex: 1 }}>{article.name}</span>
+                                            <div className="row-right">
+                                              {article.locked && <span className="lock-icon"><LockIcon /></span>}
+                                              <span className="row-chars">{article.chars.toLocaleString('ru')}</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Files */}
+                <div className="files-section">
+                  <div className="files-header">
+                    <div className="files-left">
+                      <div className="files-title">Ваши файлы</div>
+                      <div className="files-formats">Доступные форматы: txt, pdf, docx. Вес — до 10 Мб</div>
+                    </div>
+                    <button className="btn-add-file" onClick={() => fileInputRef.current.click()}>Добавить файл для обучения</button>
+                    <input ref={fileInputRef} type="file" accept=".txt,.pdf,.docx" multiple style={{ display: 'none' }} onChange={e => { setFiles(prev => [...prev, ...Array.from(e.target.files).map(f => ({ name: f.name, size: f.size }))]); e.target.value = ''; }} />
+                  </div>
+                  {files.length > 0 && (
+                    <div className="file-list">
+                      {files.map(f => (
+                        <div key={f.name} className="file-item">
+                          <FileIcon />
+                          <span className="file-item-name">{f.name}</span>
+                          <button className="file-remove" onClick={() => setFiles(prev => prev.filter(x => x.name !== f.name))}>×</button>
+                        </div>
+                      ))}
+                      <button className="btn-send-files">Отправить файлы на проверку</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Counter */}
+                <div className="counter-section">
+                  <div className="counter-row">
+                    <span className="counter-label">Количество символов для обучения</span>
+                    <span className="counter-value">{Math.min(totalChars, maxChars).toLocaleString('ru')} / {(maxChars).toLocaleString('ru')}</span>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-fill" style={{ width: `${Math.min((totalChars / maxChars) * 100, 100)}%` }} />
+                  </div>
+                </div>
+
+                {/* Buttons */}
+                <div className="action-row">
+                  <div className="tooltip-anchor"
+                    onMouseEnter={() => { if (!hasNewContent || trainingState === 'loading') setShowTooltip(true); }}
+                    onMouseLeave={() => setShowTooltip(false)}>
+                    {showTooltip && (
+                      <div className="tooltip-box">
+                        {trainingState === 'ready' ? 'Выберите материалы для обновления' : 'Для запуска обучения нужно выбрать хотя бы одну статью из базы знаний или загрузить файл'}
+                      </div>
+                    )}
+                    <button className="btn-train" disabled={!hasNewContent || trainingState === 'loading'} onClick={handleTrainClick}>
+                      {trainingState === 'loading' ? 'Обучение...' : trainingState === 'ready' ? 'Обновить материалы' : 'Обучить бота'}
+                    </button>
+                  </div>
+                  <button className="btn-reset" onClick={handleReset}>Сбросить все</button>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'Тестирование' && (
+            <div className="testing-page">
+              {/* Лоадер */}
+              {trainingState === 'loading' && (
+                <div className="chat-placeholder">
+                  <div className="loader-card">
+                    <div className="spinner" />
+                    <div className="loader-text">Идет процесс обучения бота</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Заглушка после обучения — пока нет сообщений */}
+              {trainingState === 'ready' && messages.length === 0 && (
+                <div className="chat-placeholder">
+                  <div className="placeholder-card">
+                    <img className="placeholder-illustration" src="illustration.svg" alt="" />
+                    <div className="placeholder-text-wrap">
+                      <div className="placeholder-title">Готово!</div>
+                      <div className="placeholder-desc">
+                        Теперь вы можете отправлять сообщения в этот чат, чтобы протестировать бота
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Чат */}
+              {trainingState === 'ready' && messages.length > 0 && (
+                <div className="chat-messages">
+                  {messages.map(msg => (
+                    <div key={msg.id} className={`msg-row ${msg.from}`}>
+                      <div className={`msg-avatar ${msg.from === 'bot' ? 'bot-av' : 'user-av'}`}>
+                        {msg.from === 'bot' ? 'Б' : 'Я'}
+                      </div>
+                      <div className="msg-bubble">
+                        <div className="msg-meta">
+                          <span className={`msg-sender ${msg.from}`}>{msg.sender}</span>
+                          <span className="msg-time">{msg.time}</span>
+                        </div>
+                        <div className="msg-text">{msg.text}</div>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+
+              <div className="chat-input-wrap">
+                <div className="chat-input-box">
+                  <textarea
+                    className="chat-input"
+                    rows={1}
+                    placeholder="Написать сообщение..."
+                    value={inputText}
+                    onChange={e => setInputText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                  />
+                  <button className="btn-send" onClick={sendMessage} disabled={!inputText.trim()}>
+                    Отправить
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'Настройки' && (
+            <div className="settings-page" onClick={() => setOpenDropdown(null)}>
+              <div className="settings-card">
+
+                {/* Профиль бота */}
+                <div className="bot-profile">
+                  <div className="bot-avatar-wrap">
+                    <div className="bot-avatar">Б</div>
+                    <div className="bot-avatar-edit">
+                      <SvgIcon size={16}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></SvgIcon>
+                    </div>
+                  </div>
+                  <div className="bot-info">
+                    <div className="bot-name-display">{botName}</div>
+                    <div className="bot-status">
+                      <span className={`status-dot ${botRunning ? '' : 'off'}`} />
+                      {botRunning ? 'Включен' : 'Выключен'}
+                    </div>
+                  </div>
+                  <div className="bot-actions">
+                    {!botLaunched ? (
+                      <button className="btn-start-bot" disabled={!settingsSaved} onClick={() => { setBotLaunched(true); setBotRunning(true); showToast('launch'); }}>
+                        Запустить бота
+                      </button>
+                                    ) : botRunning ? (
+                      <button className="btn-stop" onClick={toggleBot}>Выключить</button>
+                    ) : (
+                      <button className="btn-enable" onClick={toggleBot}>Включить</button>
+                    )}
+                  </div>
+                </div>
+
+                <hr style={{ border: 'none', borderTop: '1px solid #f0f0f0' }} />
+
+                {/* Форма */}
+                <div className="form-fields">
+                  {/* Имя бота */}
+                  <div className="field-wrap">
+                    <label className="field-label">Имя бота <span className="req">*</span></label>
+                    <input
+                      className={`field-input ${errors.botName ? 'error' : ''}`}
+                      placeholder="Введите название бота"
+                      value={botName}
+                      onChange={e => { setBotName(e.target.value); setErrors(p => ({...p, botName: null})); setSettingsSaved(false); }}
+                    />
+                    {errors.botName && <div className="field-error">{errors.botName}</div>}
+                  </div>
+
+                  {/* Каналы */}
+                  <div className="field-wrap">
+                    <label className="field-label">Каналы, в которых будет отвечать чат-бот <span className="req">*</span></label>
+                    <div className="multiselect" onClick={e => e.stopPropagation()}>
+                      <div className={`multiselect-box ${openDropdown === 'channels' ? 'open' : ''} ${errors.channels ? 'error' : ''}`} onClick={() => { setOpenDropdown(openDropdown === 'channels' ? null : 'channels'); setErrors(p => ({...p, channels: null})); }}>
+                        {channels.map(ch => (
+                          <span key={ch} className="tag-chip">
+                            {ch}
+                            <button onClick={e => { e.stopPropagation(); setChannels(prev => prev.filter(c => c !== ch)); }}>×</button>
+                          </span>
+                        ))}
+                        {channels.length === 0 && <span style={{ fontSize: 13, color: '#bbb' }}>Выберите каналы</span>}
+                      </div>
+                      {errors.channels && <div className="field-error">{errors.channels}</div>}
+                      {openDropdown === 'channels' && (
+                        <div className="multiselect-dropdown">
+                          {ALL_CHANNELS.map(ch => (
+                            <div key={ch} className={`dropdown-item ${channels.includes(ch) ? 'selected' : ''}`}
+                              onClick={() => { setChannels(prev => prev.includes(ch) ? prev.filter(c => c !== ch) : [...prev, ch]); setSettingsSaved(false); }}>
+                              <div className={`checkbox ${channels.includes(ch) ? 'checked' : ''}`} style={{ width: 14, height: 14 }}>
+                                {channels.includes(ch) && <Check />}
+                              </div>
+                              {ch}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Исполнители */}
+                  <div className="field-wrap">
+                    <label className="field-label">На кого назначать запросы <span className="req">*</span></label>
+                    <div className="multiselect" onClick={e => e.stopPropagation()}>
+                      <div className={`multiselect-box ${openDropdown === 'executors' ? 'open' : ''} ${errors.executors ? 'error' : ''}`} onClick={() => { setOpenDropdown(openDropdown === 'executors' ? null : 'executors'); setErrors(p => ({...p, executors: null})); }}>
+                        {executors.map(ex => (
+                          <span key={ex} className="tag-chip">
+                            {ex}
+                            <button onClick={e => { e.stopPropagation(); setExecutors(prev => prev.filter(e2 => e2 !== ex)); }}>×</button>
+                          </span>
+                        ))}
+                        {executors.length === 0 && <span style={{ fontSize: 13, color: '#bbb' }}>Выберите исполнителей</span>}
+                      </div>
+                      {errors.executors && <div className="field-error">{errors.executors}</div>}
+                      {openDropdown === 'executors' && (
+                        <div className="multiselect-dropdown">
+                          {ALL_EXECUTORS.map(ex => (
+                            <div key={ex} className={`dropdown-item ${executors.includes(ex) ? 'selected' : ''}`}
+                              onClick={() => { setExecutors(prev => prev.includes(ex) ? prev.filter(e2 => e2 !== ex) : [...prev, ex]); setSettingsSaved(false); }}>
+                              <div className={`checkbox ${executors.includes(ex) ? 'checked' : ''}`} style={{ width: 14, height: 14 }}>
+                                {executors.includes(ex) && <Check />}
+                              </div>
+                              {ex}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Текст перевода */}
+                  <div className="field-wrap">
+                    <label className="field-label">Текст при переводе на оператора</label>
+                    <textarea className="field-textarea" value={transferText} maxLength={160}
+                      placeholder="Похоже здесь не обойтись без помощи оператора, одну минуту.."
+                      onChange={e => { setTransferText(e.target.value); setSettingsSaved(false); }} />
+                    <div className="field-counter">{transferText.length}/160</div>
+                  </div>
+                </div>
+
+                {/* Сохранить */}
+                <div>
+                  <button style={{ padding: '10px 20px', background: '#ecf2fe', color: '#3060bf', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: 500 }}
+                    onClick={() => {
+                      const e = {};
+                      if (!botName.trim()) e.botName = 'Введите название бота';
+                      if (channels.length === 0) e.channels = 'Выберите канал';
+                      if (executors.length === 0) e.executors = 'Выберите исполнителя';
+                      if (Object.keys(e).length > 0) { setErrors(e); return; }
+                      setErrors({});
+                      setSettingsSaved(true);
+                      showToast('Настройки сохранены');
+                    }}>
+                    Сохранить
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {activeTab !== 'Обучение' && activeTab !== 'Тестирование' && activeTab !== 'Настройки' && (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa', fontSize: 13 }}>
+              Раздел «{activeTab}» — в разработке
+            </div>
+          )}
+        </div>
+      </div>
+
+
+      {toast && (
+        <div className="toast">
+          <div className="toast-inner">
+            <span className="toast-text">
+              {toast === 'launch' ? 'Бот запущен и работает' : toast}
+            </span>
+            <button className="toast-close" onClick={() => setToast(null)}>×</button>
+          </div>
+          <div className="toast-bar" />
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
