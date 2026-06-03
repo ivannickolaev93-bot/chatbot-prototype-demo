@@ -71,9 +71,23 @@ body {
 }
 .ver-btn:hover { border-color: #3d79f2; }
 
-.ver-dot { width: 6px; height: 6px; border-radius: 50%; background: #05be23; flex-shrink: 0; }
+.ver-dot { width: 6px; height: 6px; border-radius: 50%; background: #959696; flex-shrink: 0; }
+.ver-dot--on { background: #05be23; }
 
 .ico-chev { font-size: 10px; color: #959696; }
+
+.ver-tooltip {
+  position: absolute; top: calc(100% + 8px); left: 0;
+  background: #313640; color: #fff;
+  font-size: 13px; line-height: 1.4;
+  padding: 8px 12px; border-radius: 6px;
+  width: 240px; white-space: normal; font-weight: 400;
+  z-index: 60; cursor: default;
+}
+.ver-tooltip::before {
+  content: ''; position: absolute; top: -4px; left: 16px;
+  width: 8px; height: 8px; background: #313640; transform: rotate(45deg);
+}
 
 .ver-drop {
   position: absolute; top: calc(100% + 6px); left: 0;
@@ -96,7 +110,7 @@ body {
 .ver-drop__row:hover { background: #f4f5f5; }
 .ver-drop__row--active { background: #ecf2fe; }
 
-.ver-drop__name { font-size: 14px; font-weight: 500; color: #222427; margin-bottom: 2px; }
+.ver-drop__name { font-size: 14px; font-weight: 500; color: #222427; margin-bottom: 2px; display: flex; align-items: center; gap: 8px; }
 .ver-drop__meta { display: flex; gap: 8px; font-size: 12px; color: #676768; flex-wrap: wrap; }
 .ver-drop__status { color: #3060bf; font-weight: 500; }
 
@@ -405,7 +419,7 @@ body {
 /* ── Settings page ─────────────────────────────────────────────────────────── */
 
 .settings-page {
-  width: 672px;
+  width: 100%; max-width: 672px;
   display: flex; flex-direction: column; gap: 16px;
   padding-bottom: 48px;
 }
@@ -462,6 +476,11 @@ body {
 .s-input:hover { border-color: #7f7f80; }
 .s-input:focus { border-color: #3d79f2; }
 .s-input::placeholder { color: #7f7f80; }
+.s-input--error { border-color: #ff2640; }
+.s-input--error:hover, .s-input--error:focus { border-color: #ff2640; }
+
+/* Error message */
+.s-error { font-size: 12px; color: #ff2640; padding: 0 4px; }
 
 /* Multi-select */
 .s-multiselect {
@@ -474,6 +493,8 @@ body {
 }
 .s-multiselect:hover { border-color: #7f7f80; }
 .s-multiselect:focus-within { border-color: #3d79f2; }
+.s-multiselect--error { border-color: #ff2640; }
+.s-multiselect--error:hover { border-color: #ff2640; }
 
 .s-multiselect__tags {
   flex: 1; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
@@ -482,6 +503,12 @@ body {
 
 .s-placeholder { font-size: 14px; color: #7f7f80; }
 
+.s-clear {
+  background: none; border: none; cursor: pointer;
+  display: flex; align-items: center; padding: 0; flex-shrink: 0;
+}
+.s-clear:hover svg { opacity: 0.7; }
+
 .s-tag {
   display: inline-flex; align-items: center; gap: 4px;
   background: #ebebec; border-radius: 4px;
@@ -489,7 +516,7 @@ body {
 }
 .s-tag__rm {
   background: none; border: none; cursor: pointer;
-  font-size: 14px; color: #959696; line-height: 1; padding: 0;
+  font-size: 14px; color: #83868c; line-height: 1; padding: 0;
   display: flex; align-items: center;
 }
 .s-tag__rm:hover { color: #db1436; }
@@ -547,19 +574,50 @@ body {
 /* ── Toast ─────────────────────────────────────────────────────────────────── */
 
 .toast {
-  position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
-  background: #313640; color: #fff;
-  font-size: 14px; padding: 10px 20px; border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 200;
-  animation: fadeInUp 0.2s ease;
-  white-space: nowrap;
+  position: fixed; top: 24px; right: 24px;
+  width: 320px; border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 200;
+  overflow: hidden;
+  animation: toastIn 0.25s ease;
+  border: 1px solid;
 }
-.toast--success { background: #018f31; }
-.toast--error   { background: #db1436; }
 
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast--success { background: #e6f9e9; border-color: #daf5de; }
+.toast--error   { background: #fdecee; border-color: #fbd9de; }
+
+.toast__body {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 16px;
+}
+
+.toast__icon { flex-shrink: 0; display: flex; }
+
+.toast__text {
+  flex: 1; font-size: 14px; color: #38393a; line-height: 1.4;
+}
+
+.toast__close {
+  flex-shrink: 0; background: none; border: none; cursor: pointer;
+  display: flex; padding: 0; margin-top: 2px;
+}
+.toast__close:hover { opacity: 0.7; }
+
+.toast__bar {
+  height: 4px; width: 100%;
+  transform-origin: left;
+  animation: toastBar 3s linear forwards;
+}
+.toast--success .toast__bar { background: #05be23; }
+.toast--error   .toast__bar { background: #db1436; }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastBar {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
 }
 
 /* ── Testing / Chat page ───────────────────────────────────────────────────── */
@@ -745,6 +803,38 @@ body {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
   display: flex; align-items: center; justify-content: center; z-index: 100;
 }
+
+/* ── Version conflict modal ────────────────────────────────────────────────── */
+
+.ver-modal {
+  position: relative;
+  width: 560px; background: #fff; border-radius: 8px;
+  padding: 40px;
+  display: flex; flex-direction: column; gap: 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+}
+
+.ver-modal__close {
+  position: absolute; top: 20px; right: 20px;
+  background: none; border: none; cursor: pointer; padding: 0;
+  display: flex;
+}
+.ver-modal__close:hover { opacity: 0.7; }
+
+.ver-modal__top { display: flex; flex-direction: column; gap: 16px; }
+
+.ver-modal__icon {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: #fff7e6;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.ver-modal__title { font-size: 20px; font-weight: 500; color: #38393a; margin: 0; }
+
+.ver-modal__text { font-size: 16px; font-weight: 400; color: #38393a; line-height: 1.4; margin: 0; }
+
+.ver-modal__actions { display: flex; gap: 12px; }
+.ver-modal__actions .btn { flex: 1; padding: 10px 16px; }
 
 .modal {
   background: #fff; border-radius: 12px; width: 440px;

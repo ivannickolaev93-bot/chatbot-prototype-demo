@@ -5,7 +5,8 @@ import chatIllustration from './chat-illustration.png';
 import {
   Search, MessageCircle, Mail, Tag, IdCard, UserRound, CircleHelp,
   FileText, Inbox, Zap, Code2, Bot, ClipboardPen, Settings, Info,
-  Lock, X, BookOpen, MessageSquareText, BookText, Camera, ChevronDown, Check,
+  Lock, X, BookOpen, MessageSquareText, BookText, Camera, Check,
+  CircleAlert, TriangleAlert,
 } from 'lucide-react';
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -51,10 +52,13 @@ const KNOWLEDGE_BASES = [
   { id: 'kb9', name: 'Прочее',                     sections: [] },
 ];
 
-const BOT_VERSIONS = [
-  { id: 'v1', label: 'Версия 1', status: 'Создана',   date: '29.02.2026', time: '11:30', author: 'Константин Иванов' },
-  { id: 'v2', label: 'Версия 2', status: 'Проверена', date: '10.05.2026', time: '12:30', author: 'Ольга Федорова'    },
-];
+const VERSION_AUTHOR = 'Константин Иванов';
+
+const BLANK_SETTINGS = {
+  botName: '', channels: [], assignees: [], transferText: '',
+  launched: false, enabled: false, dirty: false, saved: false,
+  errors: {}, avatarUrl: null,
+};
 
 const SIDEBAR_ICONS = [
   { id: 'search',   Icon: Search,       label: 'Поиск'             },
@@ -97,7 +101,6 @@ const ASSIGNEES_OPTIONS = [
   { id: 'gr2', label: 'Первая линия' },
 ];
 
-const INIT_MESSAGES = [];
 
 const BOT_REPLIES = [
   'Понял вас! Уточните пожалуйста детали.',
@@ -152,30 +155,46 @@ export default function App() {
   const [search,          setSearch]          = useState('');
   const [files,           setFiles]           = useState([]);
   const [trainHover,      setTrainHover]      = useState(false);
-  const [messages,        setMessages]        = useState(INIT_MESSAGES);
+  const [messagesByVersion, setMessagesByVersion] = useState({}); // { [versionId]: [...messages] } — свой чат у каждой версии
   const [chatInput,       setChatInput]       = useState('');
-  const [botTyping,       setBotTyping]       = useState(false);
+  const [botTyping,       setBotTyping]       = useState(null); // id версии, в чате которой бот печатает
   const [testingLoading,  setTestingLoading]  = useState(false);
   const [trainedSnapshot, setTrainedSnapshot] = useState(null); // Set of article ids at training time
   const [updateHover,     setUpdateHover]     = useState(false);
   const messagesEndRef = useRef(null);
 
-  // Settings state
-  const [botName,         setBotName]         = useState('');
-  const [channels,        setChannels]        = useState([]);
-  const [assignees,       setAssignees]       = useState([]);
-  const [transferText,    setTransferText]    = useState('');
-  const [botLaunched,     setBotLaunched]     = useState(false);
-  const [botEnabled,      setBotEnabled]      = useState(false);
-  const [settingsDirty,   setSettingsDirty]   = useState(false);
+  // Settings state — свои настройки у каждой версии
+  const [settingsByVersion, setSettingsByVersion] = useState({}); // { [versionId]: BLANK_SETTINGS }
   const [showChannelsDrop,setShowChannelsDrop]= useState(false);
   const [showAssignDrop,  setShowAssignDrop]  = useState(false);
   const [toast,           setToast]           = useState(null); // { text, type }
+  const [confirmEnable,   setConfirmEnable]   = useState(null); // { otherLabel, launching } — модалка конфликта версий
   const avatarInputRef = useRef(null);
-  const [avatarUrl,       setAvatarUrl]       = useState(null);
+  const channelsRef = useRef(null);
+  const assignRef   = useRef(null);
+  const versionRef  = useRef(null);
   const [versionOpen,     setVersionOpen]     = useState(false);
-  const [currentVersion,  setCurrentVersion]  = useState('v1');
+  const [verHover,        setVerHover]        = useState(false);
+  const [versions,        setVersions]        = useState([]); // { id, label, status, date, time, author } — реальное время создания
+  const [currentVersion,  setCurrentVersion]  = useState(null); // просматриваемая версия
   const fileInputRef = useRef(null);
+
+  // Настройки текущей версии + хелперы
+  const s = settingsByVersion[currentVersion] || BLANK_SETTINGS;
+  const botName      = s.botName;
+  const channels     = s.channels;
+  const assignees    = s.assignees;
+  const transferText = s.transferText;
+  const botLaunched  = s.launched;
+  const botEnabled   = s.enabled;
+  const settingsDirty= s.dirty;
+  const settingsSaved= s.saved;
+  const errors       = s.errors;
+  const avatarUrl    = s.avatarUrl;
+  const getS = (id) => settingsByVersion[id] || BLANK_SETTINGS;
+  function updateS(patch) {
+    setSettingsByVersion(prev => ({ ...prev, [currentVersion]: { ...(prev[currentVersion] || BLANK_SETTINGS), ...patch } }));
+  }
 
   const isTrained  = botStatus === 'trained';
   const isTraining = botStatus === 'training';
@@ -215,6 +234,20 @@ export default function App() {
     setTimeout(() => {
       setBotStatus('trained');
       setTestingLoading(false);
+      setVersions(prev => {
+        const num = prev.length + 1;
+        const d = new Date();
+        const newVer = {
+          id: 'v' + num,
+          label: 'Версия ' + num,
+          status: 'Создана',
+          date: d.toLocaleDateString('ru-RU'),                                  // 03.06.2026
+          time: d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), // 14:30
+          author: VERSION_AUTHOR,
+        };
+        setCurrentVersion(newVer.id); // активна новая версия
+        return [...prev, newVer];
+      });
     }, 3500);
   }
 
@@ -242,39 +275,96 @@ export default function App() {
     setTimeout(() => setToast(null), 3000);
   }
 
-  function launchBot() {
-    setBotLaunched(true);
-    setBotEnabled(true);
-    setSettingsDirty(false);
+  // Включает версию и выключает все остальные (жива только одна)
+  function activateVersion(prev, verId, extra = {}) {
+    const out = {};
+    for (const k in prev) out[k] = { ...prev[k], enabled: false };
+    out[verId] = { ...(prev[verId] || BLANK_SETTINGS), enabled: true, ...extra };
+    return out;
+  }
+
+  // Применяет включение версии (выключая остальные)
+  function doEnable(launching) {
+    setSettingsByVersion(prev => activateVersion(prev, currentVersion, launching ? { launched: true, dirty: false } : {}));
     showToast('Бот запущен и работает');
   }
 
+  // Запрос на включение: если уже работает другая версия — показываем модалку
+  function requestEnable(launching) {
+    const other = versions.find(v => v.id !== currentVersion && getS(v.id).enabled);
+    if (other) {
+      setConfirmEnable({ otherLabel: other.label.toLowerCase(), launching });
+      return;
+    }
+    doEnable(launching);
+  }
+
+  function launchBot() {
+    requestEnable(true);
+  }
+
   function toggleBot() {
-    const next = !botEnabled;
-    setBotEnabled(next);
-    showToast(next ? 'Бот запущен и работает' : 'Бот остановлен');
+    if (!botEnabled) {
+      requestEnable(false);
+      return;
+    }
+    // выключение текущей версии
+    setSettingsByVersion(prev => ({ ...prev, [currentVersion]: { ...(prev[currentVersion] || BLANK_SETTINGS), enabled: false } }));
+    showToast('Бот остановлен');
   }
 
   function saveSettings() {
-    setSettingsDirty(false);
+    const nextErrors = {};
+    if (botName.trim() === '')  nextErrors.botName   = 'Без названия не получится сохранить изменения';
+    if (channels.length === 0)  nextErrors.channels  = 'Нужно выбрать хотя бы один канал';
+    if (assignees.length === 0) nextErrors.assignees = 'Нужно выбрать хотя бы одного исполнителя';
+
+    if (Object.keys(nextErrors).length > 0) {
+      updateS({ errors: nextErrors });
+      return;
+    }
+
+    updateS({ errors: {}, dirty: false, saved: true });
     showToast('Настройки сохранены');
   }
 
+  // Кнопка «Сохранить» всегда кликабельна — валидация срабатывает при нажатии
+  const canSave   = true;
+  const canLaunch = settingsSaved && !settingsDirty;
+
   function handleAvatarChange(e) {
     const file = e.target.files[0];
-    if (file) setAvatarUrl(URL.createObjectURL(file));
+    if (file) updateS({ avatarUrl: URL.createObjectURL(file) });
   }
 
-  function toggleOption(list, setList, id) {
-    setList(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    setSettingsDirty(true);
+  function toggleOption(field, id, errorKey) {
+    setSettingsByVersion(prev => {
+      const cur = prev[currentVersion] || BLANK_SETTINGS;
+      const list = cur[field];
+      const nextList = list.includes(id) ? list.filter(x => x !== id) : [...list, id];
+      const nextErrors = { ...cur.errors };
+      if (errorKey) delete nextErrors[errorKey];
+      return { ...prev, [currentVersion]: { ...cur, [field]: nextList, dirty: true, errors: nextErrors } };
+    });
   }
 
-  const ver = BOT_VERSIONS.find(v => v.id === currentVersion);
+  const ver = versions.find(v => v.id === currentVersion);
+  const messages = messagesByVersion[currentVersion] || []; // чат текущей версии
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messagesByVersion, currentVersion, botTyping]);
+
+  // Закрытие дропдаунов по клику вне области
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (channelsRef.current && !channelsRef.current.contains(e.target)) setShowChannelsDrop(false);
+      if (assignRef.current   && !assignRef.current.contains(e.target))   setShowAssignDrop(false);
+      if (versionRef.current  && !versionRef.current.contains(e.target))  setVersionOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   function now() {
     return new Date().toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -283,14 +373,16 @@ export default function App() {
   function sendMessage() {
     const text = chatInput.trim();
     if (!text) return;
+    const verId = currentVersion;
     const userMsg = { id: Date.now(), type: 'user', sender: 'Вы', time: now(), text };
-    setMessages(prev => [...prev, userMsg]);
+    setMessagesByVersion(prev => ({ ...prev, [verId]: [...(prev[verId] || []), userMsg] }));
     setChatInput('');
-    setBotTyping(true);
+    setBotTyping(verId);
     setTimeout(() => {
       const reply = BOT_REPLIES[Math.floor(Math.random() * BOT_REPLIES.length)];
-      setMessages(prev => [...prev, { id: Date.now() + 1, type: 'bot', sender: 'Чат-бот', time: now(), text: reply }]);
-      setBotTyping(false);
+      const botMsg = { id: Date.now() + 1, type: 'bot', sender: 'Чат-бот', time: now(), text: reply };
+      setMessagesByVersion(prev => ({ ...prev, [verId]: [...(prev[verId] || []), botMsg] }));
+      setBotTyping(null);
     }, 1000 + Math.random() * 800);
   }
 
@@ -316,18 +408,28 @@ export default function App() {
         <header className="pheader">
           <div className="pheader__left">
             <span className="pheader__title">Чат-бот первой линии</span>
-            <div className="ver-btn" onClick={() => setVersionOpen(v => !v)}>
-              <span className="ver-dot" />
+            {versions.length >= 1 && (
+            <div className="ver-btn" ref={versionRef}
+              onClick={() => versions.length >= 2 && setVersionOpen(v => !v)}
+              onMouseEnter={() => setVerHover(true)}
+              onMouseLeave={() => setVerHover(false)}>
+              <span className={`ver-dot${botEnabled ? ' ver-dot--on' : ''}`} />
               <span>{ver?.label}</span>
               <span className="ico-chev">▾</span>
-              {versionOpen && (
+              {versions.length < 2 && verHover && (
+                <div className="ver-tooltip">После дообучения создаётся новая версия бота</div>
+              )}
+              {versionOpen && versions.length >= 2 && (
                 <div className="ver-drop" onClick={e => e.stopPropagation()}>
                   <div className="ver-drop__header">версии бота</div>
-                  {BOT_VERSIONS.map(v => (
+                  {[...versions].slice(-2).reverse().map(v => (
                     <div key={v.id}
                       className={`ver-drop__row${v.id === currentVersion ? ' ver-drop__row--active' : ''}`}
                       onClick={() => { setCurrentVersion(v.id); setVersionOpen(false); }}>
-                      <div className="ver-drop__name">{v.label}</div>
+                      <div className="ver-drop__name">
+                        <span className={`ver-dot${getS(v.id).enabled ? ' ver-dot--on' : ''}`} />
+                        {v.label}
+                      </div>
                       <div className="ver-drop__meta">
                         <span className="ver-drop__status">{v.status}</span>
                         <span>{v.date}, {v.time}</span>
@@ -338,6 +440,7 @@ export default function App() {
                 </div>
               )}
             </div>
+            )}
           </div>
           <div className="pheader__right">
             <div className="avatar">КИ</div>
@@ -399,7 +502,12 @@ export default function App() {
 
                     {/* Launch button or toggle */}
                     {!botLaunched ? (
-                      <button className="btn btn--primary" onClick={launchBot}>Запустить бота</button>
+                      <button
+                        className={`btn${canLaunch ? ' btn--primary' : ' btn--disabled'}`}
+                        onClick={canLaunch ? launchBot : undefined}
+                        disabled={!canLaunch}>
+                        Запустить бота
+                      </button>
                     ) : (
                       <button
                         className={`btn${botEnabled ? ' btn--danger' : ' btn--primary'}`}
@@ -416,17 +524,23 @@ export default function App() {
                     <div className="s-field">
                       <label className="s-label">Имя бота *</label>
                       <input
-                        className="s-input"
+                        className={`s-input${errors.botName ? ' s-input--error' : ''}`}
                         placeholder="Введите имя бота"
                         value={botName}
-                        onChange={e => { setBotName(e.target.value); setSettingsDirty(true); }}
+                        onChange={e => {
+                          const val = e.target.value;
+                          const nextErrors = { ...errors };
+                          if (val.trim()) delete nextErrors.botName;
+                          updateS({ botName: val, dirty: true, errors: nextErrors });
+                        }}
                       />
+                      {errors.botName && <span className="s-error">{errors.botName}</span>}
                     </div>
 
                     {/* Channels */}
                     <div className="s-field">
                       <label className="s-label">Каналы, в которых будет отвечать чат-бот *</label>
-                      <div className="s-multiselect" onClick={() => setShowChannelsDrop(p => !p)}>
+                      <div className={`s-multiselect${errors.channels ? ' s-multiselect--error' : ''}`} ref={channelsRef} onClick={() => setShowChannelsDrop(p => !p)}>
                         <div className="s-multiselect__tags">
                           {channels.length === 0
                             ? <span className="s-placeholder">Выберите каналы</span>
@@ -435,13 +549,17 @@ export default function App() {
                                 return (
                                   <span key={id} className="s-tag">
                                     {opt?.label}
-                                    <button className="s-tag__rm" onClick={e => { e.stopPropagation(); toggleOption(channels, setChannels, id); }}>×</button>
+                                    <button className="s-tag__rm" onClick={e => { e.stopPropagation(); toggleOption('channels', id, 'channels'); }}>×</button>
                                   </span>
                                 );
                               })
                           }
                         </div>
-                        <ChevronDown size={16} color="#959696" />
+                        {channels.length > 0 && (
+                          <button className="s-clear" onClick={e => { e.stopPropagation(); updateS({ channels: [], dirty: true }); }}>
+                            <X size={16} color="#7f7f80" strokeWidth={1.5} />
+                          </button>
+                        )}
                         {showChannelsDrop && (
                           <div className="s-dropdown" onClick={e => e.stopPropagation()}>
                             {CHANNELS_OPTIONS.map(opt => {
@@ -449,7 +567,7 @@ export default function App() {
                               return (
                                 <div key={opt.id}
                                   className={`s-drop-item${sel ? ' s-drop-item--selected' : ''}`}
-                                  onClick={() => toggleOption(channels, setChannels, opt.id)}>
+                                  onClick={() => toggleOption('channels', opt.id, 'channels')}>
                                   <Check size={16} strokeWidth={2}
                                     color={sel ? '#3d79f2' : '#676768'}
                                     style={{ opacity: sel ? 1 : 0 }} />
@@ -463,12 +581,13 @@ export default function App() {
                           </div>
                         )}
                       </div>
+                      {errors.channels && <span className="s-error">{errors.channels}</span>}
                     </div>
 
                     {/* Assignees */}
                     <div className="s-field">
                       <label className="s-label">На кого назначать запросы *</label>
-                      <div className="s-multiselect" onClick={() => setShowAssignDrop(p => !p)}>
+                      <div className={`s-multiselect${errors.assignees ? ' s-multiselect--error' : ''}`} ref={assignRef} onClick={() => setShowAssignDrop(p => !p)}>
                         <div className="s-multiselect__tags">
                           {assignees.length === 0
                             ? <span className="s-placeholder">Выберите исполнителей или группы</span>
@@ -477,13 +596,17 @@ export default function App() {
                                 return (
                                   <span key={id} className="s-tag">
                                     {opt?.label}
-                                    <button className="s-tag__rm" onClick={e => { e.stopPropagation(); toggleOption(assignees, setAssignees, id); }}>×</button>
+                                    <button className="s-tag__rm" onClick={e => { e.stopPropagation(); toggleOption('assignees', id, 'assignees'); }}>×</button>
                                   </span>
                                 );
                               })
                           }
                         </div>
-                        <ChevronDown size={16} color="#959696" />
+                        {assignees.length > 0 && (
+                          <button className="s-clear" onClick={e => { e.stopPropagation(); updateS({ assignees: [], dirty: true }); }}>
+                            <X size={16} color="#7f7f80" strokeWidth={1.5} />
+                          </button>
+                        )}
                         {showAssignDrop && (
                           <div className="s-dropdown" onClick={e => e.stopPropagation()}>
                             {ASSIGNEES_OPTIONS.map(opt => {
@@ -491,7 +614,7 @@ export default function App() {
                               return (
                                 <div key={opt.id}
                                   className={`s-drop-item${sel ? ' s-drop-item--selected' : ''}`}
-                                  onClick={() => toggleOption(assignees, setAssignees, opt.id)}>
+                                  onClick={() => toggleOption('assignees', opt.id, 'assignees')}>
                                   <Check size={16} strokeWidth={2}
                                     color={sel ? '#3d79f2' : '#676768'}
                                     style={{ opacity: sel ? 1 : 0 }} />
@@ -505,6 +628,7 @@ export default function App() {
                           </div>
                         )}
                       </div>
+                      {errors.assignees && <span className="s-error">{errors.assignees}</span>}
                     </div>
 
                     {/* Transfer text */}
@@ -516,23 +640,23 @@ export default function App() {
                           placeholder="Введите свой текст"
                           maxLength={1000}
                           value={transferText}
-                          onChange={e => { setTransferText(e.target.value); setSettingsDirty(true); }}
+                          onChange={e => updateS({ transferText: e.target.value, dirty: true })}
                         />
                         <span className="s-textarea__counter">{transferText.length}/1000</span>
                       </div>
                     </div>
 
                   </div>
-                </div>
 
-                {/* Save button */}
-                <div className="settings-actions">
-                  <button
-                    className={`btn${settingsDirty ? ' btn--primary' : ' btn--save-disabled'}`}
-                    onClick={settingsDirty ? saveSettings : undefined}
-                    disabled={!settingsDirty}>
-                    Сохранить
-                  </button>
+                  {/* Save button */}
+                  <div className="settings-actions">
+                    <button
+                      className={`btn${canSave ? ' btn--primary' : ' btn--save-disabled'}`}
+                      onClick={canSave ? saveSettings : undefined}
+                      disabled={!canSave}>
+                      Сохранить
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -548,7 +672,7 @@ export default function App() {
                         <p className="loader-text">Идет процесс обучения бота</p>
                       </div>
                     </div>
-                  ) : messages.length === 0 && !botTyping ? (
+                  ) : messages.length === 0 && botTyping !== currentVersion ? (
                     <div className="chat-empty">
                       <div className="chat-empty__card">
                         <img src={chatIllustration} alt="" className="chat-empty__img" />
@@ -575,7 +699,7 @@ export default function App() {
                           {msg.type === 'user' && <div className="chat-avatar chat-avatar--user">КИ</div>}
                         </div>
                       ))}
-                      {botTyping && (
+                      {botTyping === currentVersion && (
                         <div className="chat-row">
                           <div className="chat-avatar chat-avatar--bot">🤖</div>
                           <div className="chat-bubble chat-bubble--typing">
@@ -878,9 +1002,51 @@ export default function App() {
         </div>
       </div>
 
+      {/* Модалка конфликта версий */}
+      {confirmEnable && (
+        <div className="overlay" onClick={() => setConfirmEnable(null)}>
+          <div className="ver-modal" onClick={e => e.stopPropagation()}>
+            <button className="ver-modal__close" onClick={() => setConfirmEnable(null)}>
+              <X size={24} strokeWidth={1.5} color="#676768" />
+            </button>
+            <div className="ver-modal__top">
+              <div className="ver-modal__icon">
+                <TriangleAlert size={24} strokeWidth={1.8} color="#ffaa00" />
+              </div>
+              <h3 className="ver-modal__title">Включить новую версию?</h3>
+              <p className="ver-modal__text">
+                Сейчас работает другая версия бота: {confirmEnable.otherLabel}. Если включить выбранную версию, то предыдущая будет выключена
+              </p>
+            </div>
+            <div className="ver-modal__actions">
+              <button className="btn btn--primary btn--block"
+                onClick={() => { doEnable(confirmEnable.launching); setConfirmEnable(null); }}>
+                Да, включить
+              </button>
+              <button className="btn btn--outline btn--block" onClick={() => setConfirmEnable(null)}>
+                Не менять версию
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast */}
       {toast && (
-        <div className={`toast toast--${toast.type}`}>{toast.text}</div>
+        <div className={`toast toast--${toast.type}`}>
+          <div className="toast__body">
+            {toast.type === 'error' && (
+              <span className="toast__icon">
+                <CircleAlert size={24} strokeWidth={1.5} color="#db1436" />
+              </span>
+            )}
+            <span className="toast__text">{toast.text}</span>
+            <button className="toast__close" onClick={() => setToast(null)}>
+              <X size={16} strokeWidth={1.5} color="#676768" />
+            </button>
+          </div>
+          <div className="toast__bar" />
+        </div>
       )}
     </div>
   );
