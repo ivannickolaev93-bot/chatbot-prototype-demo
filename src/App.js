@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 import usedeskLogo from './usedesk_logo.svg';
+import chatIllustration from './chat-illustration.png';
 import {
   Search, MessageCircle, Mail, Tag, IdCard, UserRound, CircleHelp,
   FileText, Inbox, Zap, Code2, Bot, ClipboardPen, Settings, Info,
@@ -74,10 +75,20 @@ const SIDEBAR_ICONS = [
 ];
 
 const NAV_ITEMS = [
-  { id: 'settings',     label: 'Настройки',        Icon: Settings           },
-  { id: 'training',     label: 'Обучение',          Icon: BookOpen           },
-  { id: 'testing',      label: 'Тестирование',      Icon: MessageSquareText  },
-  { id: 'instructions', label: 'Особые инструкции', Icon: BookText           },
+  { id: 'settings',     label: 'Настройки',        Icon: Settings,          showWhen: 'trained'  },
+  { id: 'training',     label: 'Обучение',          Icon: BookOpen,          showWhen: 'always'   },
+  { id: 'testing',      label: 'Тестирование',      Icon: MessageSquareText, showWhen: 'started'  },
+  { id: 'instructions', label: 'Особые инструкции', Icon: BookText,          showWhen: 'trained'  },
+];
+
+const INIT_MESSAGES = [];
+
+const BOT_REPLIES = [
+  'Понял вас! Уточните пожалуйста детали.',
+  'Проверяю информацию по вашему вопросу...',
+  'Готово! Если остались вопросы — напишите.',
+  'К сожалению, не могу помочь с этим запросом. Переведу на оператора.',
+  'Спасибо за обращение! Всё решено :)',
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -124,8 +135,14 @@ export default function App() {
   const [showPublicOnly,  setShowPublicOnly]  = useState(false);
   const [search,          setSearch]          = useState('');
   const [files,           setFiles]           = useState([]);
-  const [showRetrain,     setShowRetrain]     = useState(false);
   const [trainHover,      setTrainHover]      = useState(false);
+  const [messages,        setMessages]        = useState(INIT_MESSAGES);
+  const [chatInput,       setChatInput]       = useState('');
+  const [botTyping,       setBotTyping]       = useState(false);
+  const [testingLoading,  setTestingLoading]  = useState(false);
+  const [trainedSnapshot, setTrainedSnapshot] = useState(null); // Set of article ids at training time
+  const [updateHover,     setUpdateHover]     = useState(false);
+  const messagesEndRef = useRef(null);
   const [versionOpen,     setVersionOpen]     = useState(false);
   const [currentVersion,  setCurrentVersion]  = useState('v1');
   const fileInputRef = useRef(null);
@@ -159,9 +176,22 @@ export default function App() {
   }
 
   function startTraining() {
+    setTrainedSnapshot(new Set(selected));
+    setUpdateHover(false);
+    setTrainHover(false);
     setBotStatus('training');
-    setTimeout(() => setBotStatus('trained'), 3500);
+    setActiveTab('testing');
+    setTestingLoading(true);
+    setTimeout(() => {
+      setBotStatus('trained');
+      setTestingLoading(false);
+    }, 3500);
   }
+
+  // есть новые материалы по сравнению со снимком на момент обучения
+  const hasNewMaterials = isTrained && trainedSnapshot !== null &&
+    ([...selected].some(id => !trainedSnapshot.has(id)) ||
+     files.some(f => f.status === 'uploaded'));
 
   function handleFileInput(e) {
     const newFiles = Array.from(e.target.files).map(f => ({
@@ -178,6 +208,28 @@ export default function App() {
   }
 
   const ver = BOT_VERSIONS.find(v => v.id === currentVersion);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  function now() {
+    return new Date().toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function sendMessage() {
+    const text = chatInput.trim();
+    if (!text) return;
+    const userMsg = { id: Date.now(), type: 'user', sender: 'Вы', time: now(), text };
+    setMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setBotTyping(true);
+    setTimeout(() => {
+      const reply = BOT_REPLIES[Math.floor(Math.random() * BOT_REPLIES.length)];
+      setMessages(prev => [...prev, { id: Date.now() + 1, type: 'bot', sender: 'Чат-бот', time: now(), text: reply }]);
+      setBotTyping(false);
+    }, 1000 + Math.random() * 800);
+  }
 
   return (
     <div className="app">
@@ -232,21 +284,98 @@ export default function App() {
         <div className="pbody">
           {/* ── Filters bar ── */}
           <nav className="fbar">
-            {NAV_ITEMS.map(({ id, label, Icon }) => (
-              <button key={id}
-                className={`fbar-item${activeTab === id ? ' fbar-item--active' : ''}`}
-                onClick={() => setActiveTab(id)}>
-                <Icon size={20} strokeWidth={1.5} className="fbar-icon" />
-                <span>{label}</span>
-              </button>
-            ))}
+            {NAV_ITEMS
+              .filter(({ showWhen }) =>
+                showWhen === 'always' ||
+                (showWhen === 'started' && botStatus !== 'untrained') ||
+                (showWhen === 'trained' && isTrained)
+              )
+              .map(({ id, label, Icon }) => (
+                <button key={id}
+                  className={`fbar-item${activeTab === id ? ' fbar-item--active' : ''}`}
+                  onClick={() => setActiveTab(id)}>
+                  <Icon size={20} strokeWidth={1.5} className="fbar-icon" />
+                  <span>{label}</span>
+                </button>
+              ))}
           </nav>
 
           {/* ── Content ── */}
-          <div className="content">
-            {activeTab !== 'training' && (
+          <div className={`content${activeTab === 'testing' ? ' content--chat' : ''}`}>
+            {(activeTab === 'settings' || activeTab === 'instructions') && (
               <div className="tab-stub">
-                {{ settings: 'Настройки', testing: 'Тестирование', instructions: 'Особые инструкции' }[activeTab]}
+                {{ settings: 'Настройки', instructions: 'Особые инструкции' }[activeTab]}
+              </div>
+            )}
+
+            {activeTab === 'testing' && (
+              <div className="chat-page">
+                {/* Messages area */}
+                <div className={`chat-messages${testingLoading ? ' chat-messages--loading' : ''}`}>
+                  {testingLoading ? (
+                    <div className="chat-empty">
+                      <div className="loader-card">
+                        <div className="loader-ring" />
+                        <p className="loader-text">Идет процесс обучения бота</p>
+                      </div>
+                    </div>
+                  ) : messages.length === 0 && !botTyping ? (
+                    <div className="chat-empty">
+                      <div className="chat-empty__card">
+                        <img src={chatIllustration} alt="" className="chat-empty__img" />
+                        <p className="chat-empty__text">
+                          Готово!<br />
+                          Теперь вы можете отправлять сообщения в этот чат, чтобы протестировать бота
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {messages.map(msg => (
+                        <div key={msg.id} className={`chat-row${msg.type === 'user' ? ' chat-row--user' : ''}`}>
+                          {msg.type === 'bot' && <div className="chat-avatar chat-avatar--bot">🤖</div>}
+                          <div className="chat-bubble">
+                            <div className="chat-bubble__meta">
+                              <span className="chat-bubble__sender">{msg.sender}</span>
+                              <span className="chat-bubble__time">{msg.time}</span>
+                            </div>
+                            {msg.text.split('\n').map((line, i) => (
+                              <p key={i} className="chat-bubble__text">{line}</p>
+                            ))}
+                          </div>
+                          {msg.type === 'user' && <div className="chat-avatar chat-avatar--user">КИ</div>}
+                        </div>
+                      ))}
+                      {botTyping && (
+                        <div className="chat-row">
+                          <div className="chat-avatar chat-avatar--bot">🤖</div>
+                          <div className="chat-bubble chat-bubble--typing">
+                            <span /><span /><span />
+                          </div>
+                        </div>
+                      )}
+                      <div ref={messagesEndRef} />
+                    </>
+                  )}
+                </div>
+
+                {/* Input */}
+                <div className={`chat-input-wrap${testingLoading ? ' chat-input-wrap--hidden' : ''}`}>
+                  <div className="chat-input-box">
+                    <input
+                      className="chat-input"
+                      placeholder="Написать сообщение..."
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                    />
+                    {chatInput.trim() && (
+                      <button className="btn btn--primary" onClick={sendMessage}>
+                        Отправить
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -493,11 +622,20 @@ export default function App() {
                         </div>
                       </div>
                     ) : (
-                      <>
-                        <button className="btn btn--primary btn--lg" onClick={() => setShowRetrain(true)}>Дообучить бота</button>
-                        <button className="btn btn--outline btn--lg" onClick={() => setActiveTab('settings')}>Перейти к настройкам</button>
-                        <button className="btn btn--outline btn--lg" onClick={() => setActiveTab('testing')}>Перейти к тестированию</button>
-                      </>
+                      <div className="update-btn-wrap"
+                        onMouseEnter={() => setUpdateHover(true)}
+                        onMouseLeave={() => setUpdateHover(false)}>
+                        <button
+                          className={`btn btn--lg${hasNewMaterials ? ' btn--update' : ' btn--disabled'}`}
+                          onClick={hasNewMaterials ? startTraining : undefined}
+                          disabled={!hasNewMaterials}>
+                          Обновить материалы
+                        </button>
+                        <div className={`hint-tooltip hint-tooltip--update${updateHover ? ' hint-tooltip--show' : ''}`}>
+                          <div className="hint-tooltip__body">Будет создана новая версия бота</div>
+                          <div className="hint-tooltip__arrow" />
+                        </div>
+                      </div>
                     )}
                     <button className="btn btn--ghost btn--lg"
                       onClick={() => { setSelected(new Set()); setFiles([]); }}>
@@ -511,28 +649,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Retrain modal */}
-      {showRetrain && (
-        <div className="overlay" onClick={() => setShowRetrain(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal__hdr">
-              <span>Дообучить бота</span>
-              <button className="modal__close" onClick={() => setShowRetrain(false)}>✕</button>
-            </div>
-            <p className="modal__desc">После дообучения будет создана новая версия. Выберите действие:</p>
-            <div className="modal__actions">
-              <button className="btn btn--primary btn--block"
-                onClick={() => { setShowRetrain(false); startTraining(); setActiveTab('testing'); }}>
-                Протестировать обновления
-              </button>
-              <button className="btn btn--secondary btn--block"
-                onClick={() => { setShowRetrain(false); startTraining(); }}>
-                Применить обновления без тестирования
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
