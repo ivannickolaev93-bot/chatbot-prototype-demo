@@ -620,6 +620,105 @@ body {
   to   { transform: scaleX(0); }
 }
 
+/* ── Special instructions page ─────────────────────────────────────────────── */
+
+.instr-page {
+  width: 100%; max-width: 800px;
+  display: flex; flex-direction: column; gap: 16px;
+  padding-bottom: 48px;
+}
+
+/* Info banner */
+.instr-banner {
+  background: #fff; border-radius: 8px; padding: 16px 24px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.instr-banner__info { flex: 1; }
+.instr-banner__title { font-size: 14px; font-weight: 500; color: #222427; margin-bottom: 2px; }
+.instr-banner__text { font-size: 12px; color: #676768; line-height: 1.4; }
+
+.instr-search { margin: 0; }
+
+/* Instruction list */
+.instr-list { display: flex; flex-direction: column; gap: 8px; }
+
+.instr-empty {
+  background: #fff; border-radius: 8px; padding: 32px;
+  text-align: center; color: #959696; font-size: 14px;
+}
+
+.instr-card { background: #fff; border-radius: 8px; padding: 16px 24px; }
+
+.instr-card__head { display: flex; align-items: center; gap: 16px; }
+
+.instr-card__name {
+  flex: 1; font-size: 14px; font-weight: 500; color: #222427; cursor: pointer;
+}
+.instr-card__name--off { color: #676768; }
+
+.instr-card__chev {
+  background: none; border: none; cursor: pointer; padding: 0;
+  display: flex; align-items: center;
+}
+
+.instr-card__body {
+  padding-top: 16px; display: flex; flex-direction: column; gap: 16px;
+}
+.instr-card__text { font-size: 14px; color: #7f7f80; line-height: 1.5; margin: 0; }
+.instr-card__actions { display: flex; gap: 8px; }
+
+.instr-icon-btn {
+  width: 32px; height: 32px; border: 1px solid #d9d9d9; border-radius: 6px;
+  background: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.instr-icon-btn:hover { background: #fdecee; border-color: #fbd9de; }
+
+/* ── Drawer (create/edit instruction) ──────────────────────────────────────── */
+
+.drawer-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  z-index: 100; display: flex; justify-content: flex-end;
+  animation: fadeIn 0.2s ease;
+}
+
+.drawer {
+  width: 480px; height: 100%; background: #fff;
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.12);
+  animation: drawerIn 0.25s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawerIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+.drawer__header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24px; gap: 24px; border-bottom: 1px solid #f0f0f0;
+}
+.drawer__title { font-size: 20px; font-weight: 500; color: #222427; }
+.drawer__close { background: none; border: none; cursor: pointer; padding: 0; display: flex; flex-shrink: 0; }
+.drawer__close:hover { opacity: 0.7; }
+
+.drawer__content {
+  flex: 1; overflow-y: auto; padding: 24px;
+  display: flex; flex-direction: column; gap: 24px;
+}
+
+.drawer__textarea { min-height: 100px; }
+
+.drawer__actions {
+  display: flex; gap: 8px; padding: 24px;
+  border-top: 1px solid #f0f0f0;
+}
+.drawer__actions .btn { flex: 1; padding: 10px 16px; }
+
+/* Danger modal variants */
+.ver-modal__icon--danger { background: #ffeaec; }
+
+.btn--danger-solid { background: #ff2640; color: #fff; }
+.btn--danger-solid:hover { background: #e21f37; }
+
 /* ── Testing / Chat page ───────────────────────────────────────────────────── */
 
 .content--chat {

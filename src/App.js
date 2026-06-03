@@ -6,7 +6,7 @@ import {
   Search, MessageCircle, Mail, Tag, IdCard, UserRound, CircleHelp,
   FileText, Inbox, Zap, Code2, Bot, ClipboardPen, Settings, Info,
   Lock, X, BookOpen, MessageSquareText, BookText, Camera, Check,
-  CircleAlert, TriangleAlert,
+  CircleAlert, TriangleAlert, Pencil, Trash2, Plus, Search as SearchIcon,
 } from 'lucide-react';
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -53,6 +53,16 @@ const KNOWLEDGE_BASES = [
 ];
 
 const VERSION_AUTHOR = 'Константин Иванов';
+
+const INIT_INSTRUCTIONS = [
+  { id: 'i1', name: 'Тех сбой', enabled: true,  text: 'При техническом сбое сообщай клиенту, что мы уже работаем над проблемой, и предлагай вернуться позже.' },
+  { id: 'i2', name: 'Выходные', enabled: false, text: 'Если сегодня суббота или воскресенье, то необходимо сообщать клиентам, что заказ будет сформирован в ближайший понедельник. До этого момента можно внести изменения в заказ без изменения срока доставки' },
+  { id: 'i3', name: 'Сбой в работе базы данных', enabled: false, text: 'При сбое базы данных извинись за временные неудобства и попроси повторить запрос через несколько минут.' },
+  { id: 'i4', name: 'Акция 1+1', enabled: true,  text: 'Сообщай клиентам про акцию 1+1 на все товары категории «Аксессуары» до конца месяца.' },
+  { id: 'i5', name: 'Неисправность оборудования на складе', enabled: false, text: 'При неисправности складского оборудования предупреждай о возможной задержке отгрузки на 1–2 дня.' },
+  { id: 'i6', name: 'Скидка 20% на все', enabled: true,  text: 'Информируй клиентов о скидке 20% на весь ассортимент по промокоду SALE20.' },
+  { id: 'i7', name: 'Бесплатная доставка от 3 000', enabled: true,  text: 'Сообщай, что доставка бесплатна при заказе от 3 000 рублей.' },
+];
 
 const BLANK_SETTINGS = {
   botName: '', channels: [], assignees: [], transferText: '',
@@ -169,6 +179,14 @@ export default function App() {
   const [showAssignDrop,  setShowAssignDrop]  = useState(false);
   const [toast,           setToast]           = useState(null); // { text, type }
   const [confirmEnable,   setConfirmEnable]   = useState(null); // { otherLabel, launching } — модалка конфликта версий
+
+  // Особые инструкции — общие для всех версий
+  const [instructions,    setInstructions]    = useState(INIT_INSTRUCTIONS);
+  const [instrEnabledOnly,setInstrEnabledOnly]= useState(false);
+  const [instrSearch,     setInstrSearch]     = useState('');
+  const [expandedInstr,   setExpandedInstr]   = useState(new Set(['i2']));
+  const [drawer,          setDrawer]          = useState(null); // null | { id?, name, text } — панель создания/редактирования
+  const [deleteInstr,     setDeleteInstr]     = useState(null); // id удаляемой инструкции
   const avatarInputRef = useRef(null);
   const channelsRef = useRef(null);
   const assignRef   = useRef(null);
@@ -348,6 +366,31 @@ export default function App() {
     });
   }
 
+  // ── Особые инструкции ──
+  function toggleInstr(id) {
+    setInstructions(prev => prev.map(i => i.id === id ? { ...i, enabled: !i.enabled } : i));
+  }
+  function saveDrawer() {
+    if (!drawer.name.trim() || !drawer.text.trim()) return;
+    if (drawer.id) {
+      setInstructions(prev => prev.map(i => i.id === drawer.id ? { ...i, name: drawer.name, text: drawer.text } : i));
+      showToast('Инструкция сохранена');
+    } else {
+      setInstructions(prev => [...prev, { id: 'i' + Date.now(), name: drawer.name, text: drawer.text, enabled: true }]);
+      showToast('Инструкция добавлена');
+    }
+    setDrawer(null);
+  }
+  function confirmDelete() {
+    setInstructions(prev => prev.filter(i => i.id !== deleteInstr));
+    setDeleteInstr(null);
+    showToast('Инструкция удалена');
+  }
+  const visibleInstr = instructions.filter(i =>
+    (!instrEnabledOnly || i.enabled) &&
+    (!instrSearch || i.name.toLowerCase().includes(instrSearch.toLowerCase()))
+  );
+
   const ver = versions.find(v => v.id === currentVersion);
   const messages = messagesByVersion[currentVersion] || []; // чат текущей версии
 
@@ -469,7 +512,86 @@ export default function App() {
           {/* ── Content ── */}
           <div className={`content${activeTab === 'testing' ? ' content--chat' : ''}`}>
             {activeTab === 'instructions' && (
-              <div className="tab-stub">Особые инструкции</div>
+              <div className="instr-page">
+                {/* Title + toggle */}
+                <div className="training-head">
+                  <span className="training-title">Особые инструкции</span>
+                  <label className="toggle-row" onClick={() => setInstrEnabledOnly(p => !p)}>
+                    <span className={`sw${instrEnabledOnly ? ' sw--on' : ''}`}><span className="sw__knob" /></span>
+                    <span className="toggle-label">Показывать только включенные</span>
+                  </label>
+                </div>
+
+                {/* Info banner */}
+                <div className="instr-banner">
+                  <div className="instr-banner__info">
+                    <div className="instr-banner__title">Обратите внимание</div>
+                    <div className="instr-banner__text">
+                      Инструкции применяются сразу ко всем версиям бота и не влияют на общий лимит символов в базе материалов для обучения бота
+                    </div>
+                  </div>
+                  <button className="btn btn--accent-outline btn--sm" onClick={() => setDrawer({ name: '', text: '' })}>
+                    <Plus size={16} strokeWidth={2} /> Добавить инструкцию
+                  </button>
+                </div>
+
+                {/* Search */}
+                <div className="search-box instr-search">
+                  <SearchIcon size={16} color="#959696" strokeWidth={1.5} />
+                  <input className="search-box__input" placeholder="Поиск по названию"
+                    value={instrSearch} onChange={e => setInstrSearch(e.target.value)} />
+                  {instrSearch && (
+                    <button className="search-box__clear" onClick={() => setInstrSearch('')}>
+                      <X size={14} color="#959696" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Instruction list */}
+                <div className="instr-list">
+                  {visibleInstr.length === 0 ? (
+                    <div className="instr-empty">Инструкции не найдены</div>
+                  ) : visibleInstr.map(instr => {
+                    const isExp = expandedInstr.has(instr.id);
+                    return (
+                      <div key={instr.id} className="instr-card">
+                        <div className="instr-card__head">
+                          <span className={`sw${instr.enabled ? ' sw--on' : ''}`}
+                            onClick={() => toggleInstr(instr.id)}>
+                            <span className="sw__knob" />
+                          </span>
+                          <span className={`instr-card__name${instr.enabled ? '' : ' instr-card__name--off'}`}
+                            onClick={() => setExpandedInstr(prev => {
+                              const n = new Set(prev); n.has(instr.id) ? n.delete(instr.id) : n.add(instr.id); return n;
+                            })}>
+                            {instr.name}
+                          </span>
+                          <button className="instr-card__chev"
+                            onClick={() => setExpandedInstr(prev => {
+                              const n = new Set(prev); n.has(instr.id) ? n.delete(instr.id) : n.add(instr.id); return n;
+                            })}>
+                            <span className="ico-chev">{isExp ? '▲' : '▼'}</span>
+                          </button>
+                        </div>
+                        {isExp && (
+                          <div className="instr-card__body">
+                            <p className="instr-card__text">{instr.text}</p>
+                            <div className="instr-card__actions">
+                              <button className="btn btn--outline btn--sm"
+                                onClick={() => setDrawer({ id: instr.id, name: instr.name, text: instr.text })}>
+                                <Pencil size={16} strokeWidth={1.5} /> Редактировать
+                              </button>
+                              <button className="instr-icon-btn" onClick={() => setDeleteInstr(instr.id)}>
+                                <Trash2 size={16} strokeWidth={1.5} color="#676768" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
             {activeTab === 'settings' && (
@@ -1001,6 +1123,66 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* Drawer создания/редактирования инструкции */}
+      {drawer && (
+        <div className="drawer-overlay" onClick={() => setDrawer(null)}>
+          <div className="drawer" onClick={e => e.stopPropagation()}>
+            <div className="drawer__header">
+              <span className="drawer__title">{drawer.id ? drawer.name || 'Инструкция' : 'Новая инструкция'}</span>
+              <button className="drawer__close" onClick={() => setDrawer(null)}>
+                <X size={24} strokeWidth={1.5} color="#676768" />
+              </button>
+            </div>
+            <div className="drawer__content">
+              <div className="s-field">
+                <label className="s-label">Название инструкции *</label>
+                <input className="s-input" placeholder="Введите название"
+                  value={drawer.name} onChange={e => setDrawer(d => ({ ...d, name: e.target.value }))} />
+              </div>
+              <div className="s-field">
+                <label className="s-label">Текст инструкции *</label>
+                <div className="s-textarea-wrap">
+                  <textarea className="s-textarea drawer__textarea" placeholder="Введите текст инструкции"
+                    maxLength={1000} value={drawer.text}
+                    onChange={e => setDrawer(d => ({ ...d, text: e.target.value }))} />
+                  <span className="s-textarea__counter">{drawer.text.length}/1000</span>
+                </div>
+              </div>
+            </div>
+            <div className="drawer__actions">
+              <button className="btn btn--primary"
+                onClick={saveDrawer}
+                disabled={!drawer.name.trim() || !drawer.text.trim()}>
+                Сохранить
+              </button>
+              <button className="btn btn--outline" onClick={() => setDrawer(null)}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка удаления инструкции */}
+      {deleteInstr && (
+        <div className="overlay" onClick={() => setDeleteInstr(null)}>
+          <div className="ver-modal" onClick={e => e.stopPropagation()}>
+            <button className="ver-modal__close" onClick={() => setDeleteInstr(null)}>
+              <X size={24} strokeWidth={1.5} color="#676768" />
+            </button>
+            <div className="ver-modal__top">
+              <div className="ver-modal__icon ver-modal__icon--danger">
+                <Trash2 size={24} strokeWidth={1.8} color="#db1436" />
+              </div>
+              <h3 className="ver-modal__title">Удалить инструкцию?</h3>
+              <p className="ver-modal__text">Инструкция будет удалена из всех версий бота</p>
+            </div>
+            <div className="ver-modal__actions">
+              <button className="btn btn--danger-solid btn--block" onClick={confirmDelete}>Да, удалить</button>
+              <button className="btn btn--outline btn--block" onClick={() => setDeleteInstr(null)}>Нет, оставить</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модалка конфликта версий */}
       {confirmEnable && (
