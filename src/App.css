@@ -44,6 +44,19 @@ body {
 .sb-btn:hover   { background: rgba(255,255,255,0.07); }
 .sb-btn--active { background: #5a5e66; }
 
+/* Бейджи нотификаций на иконках сайдбара */
+.sb-dot {
+  position: absolute; top: 10px; right: 17px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #ff5166; border: 1.5px solid #313640;
+}
+.sb-badge {
+  position: absolute; top: 6px; right: 8px;
+  background: #ff5166; color: #fff;
+  font-size: 10px; font-weight: 600; line-height: 1.4;
+  border-radius: 4px; padding: 0 4px;
+}
+
 
 /* ── Page header ───────────────────────────────────────────────────────────── */
 
@@ -115,12 +128,18 @@ body {
 .ver-drop__status { color: #3060bf; font-weight: 500; }
 
 /* Avatar */
+.avatar-wrap { position: relative; flex-shrink: 0; line-height: 0; }
 .avatar {
   width: 36px; height: 36px; border-radius: 50%;
-  background: #ecf2fe; border: 1px solid #c7d8fb;
-  color: #3060bf; font-size: 11px; font-weight: 500;
+  background: #ecf2fe; border: 1px solid #dcdcdc;
+  color: #3060bf; font-size: 12px; font-weight: 500;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
+}
+.avatar__status {
+  position: absolute; right: 0; bottom: 0;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #05be23; border: 2px solid #fff; box-sizing: content-box;
 }
 
 /* ── Body ──────────────────────────────────────────────────────────────────── */
@@ -491,6 +510,16 @@ body {
 
 .s-profile__name { font-size: 16px; font-weight: 400; color: #222427; }
 
+/* Группа «Выключить» + кнопка истории включений */
+.s-launch-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.s-icon-btn {
+  width: 40px; height: 40px; flex-shrink: 0;
+  background: #f4f5f5; border: none; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background 0.15s;
+}
+.s-icon-btn:hover { background: #e8e8e8; }
+
 .s-status { font-size: 14px; color: #676768; }
 .s-status--on  { color: #018f31; }
 .s-status--off { color: #959696; }
@@ -790,6 +819,18 @@ body {
 .upd-drawer__chars { font-size: 12px; color: #676768; white-space: nowrap; flex-shrink: 0; }
 .upd-drawer__actions { display: flex; gap: 8px; padding: 24px; border-top: 1px solid #f0f0f0; }
 .upd-drawer__actions .btn { flex: 1; padding: 10px 16px; justify-content: center; }
+
+/* Шторка «История работы» */
+.hist-content { gap: 16px; }
+.hist-divider { height: 1px; background: #d6d7d9; flex-shrink: 0; }
+.hist-row { display: flex; flex-direction: column; gap: 8px; }
+.hist-row__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hist-row__ver { font-size: 14px; color: #38393a; }
+.hist-row__author { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #38393a; flex-shrink: 0; }
+.hist-row__bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hist-row__status { font-size: 14px; color: #959696; }
+.hist-row__date { font-size: 14px; color: #959696; white-space: nowrap; flex-shrink: 0; }
+.hist-empty { font-size: 14px; color: #959696; }
 
 /* Danger modal variants */
 .ver-modal__icon--danger { background: #ffeaec; }

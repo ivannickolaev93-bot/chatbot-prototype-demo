@@ -3,10 +3,11 @@ import './App.css';
 import usedeskLogo from './usedesk_logo.svg';
 import chatIllustration from './chat-illustration.png';
 import {
-  Search, MessageCircle, Mail, Tag, IdCard, UserRound, CircleHelp,
+  Search, MessageCircleMore, Mail, Tag, IdCard, UserRound, CircleHelp,
   FileText, Inbox, Zap, Code2, Bot, ClipboardPen, Settings, Info,
   Lock, X, BookOpen, MessageSquareText, BookText, Camera, Check,
   CircleAlert, TriangleAlert, Pencil, Trash2, Plus, Search as SearchIcon,
+  History, Sparkle,
 } from 'lucide-react';
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -122,6 +123,7 @@ const INITIAL_UPDATED_IDS = KNOWLEDGE_BASES
   .map(a => a.id);
 
 const VERSION_AUTHOR = 'Константин Иванов';
+const HISTORY_AUTHOR = 'Николаев Иван'; // имя в логах истории включений/выключений
 
 const INIT_INSTRUCTIONS = []; // на старте инструкций нет — показываем пустой экран
 
@@ -133,17 +135,17 @@ const BLANK_SETTINGS = {
 
 const SIDEBAR_ICONS = [
   { id: 'search',   Icon: Search,       label: 'Поиск'             },
-  { id: 'chat',     Icon: MessageCircle,label: 'Чат'               },
+  { id: 'chat',     Icon: MessageCircleMore, label: 'Чат', dot: true },
   { id: 'mail',     Icon: Mail,         label: 'Запросы'           },
   { id: 'tags',     Icon: Tag,          label: 'Теги'              },
   { id: 'clients',  Icon: IdCard,       label: 'Клиенты'           },
   { id: 'agents',   Icon: UserRound,    label: 'Агенты'            },
   { id: 'kb',       Icon: CircleHelp,   label: 'База знаний'       },
   { id: 'reports',  Icon: FileText,     label: 'Отчёты'            },
-  { id: 'channels', Icon: Inbox,        label: 'Каналы'            },
+  { id: 'channels', Icon: Inbox,        label: 'Каналы', badge: '99+' },
   { id: 'triggers', Icon: Zap,          label: 'Автоматизация'     },
   { id: 'api',      Icon: Code2,        label: 'Расширения'        },
-  { id: 'ai',       Icon: Bot,          label: 'ИИ', active: true  },
+  { id: 'ai',       Icon: Sparkle,      label: 'ИИ', active: true  },
   { id: 'qa',       Icon: ClipboardPen, label: 'Контроль качества' },
   { id: 'settings2',Icon: Settings,     label: 'Настройки'         },
   { id: 'help',     Icon: Info,         label: 'Начало работы'     },
@@ -245,6 +247,8 @@ export default function App() {
   const [showAssignDrop,  setShowAssignDrop]  = useState(false);
   const [toast,           setToast]           = useState(null); // { text, type }
   const [confirmEnable,   setConfirmEnable]   = useState(null); // { otherLabel, launching } — модалка конфликта версий
+  const [historyOpen,     setHistoryOpen]     = useState(false); // шторка «История работы»
+  const [enableLog,       setEnableLog]       = useState([]); // { id, versionLabel, action: 'on'|'off', author, date, time }
 
   // Особые инструкции — общие для всех версий
   const [instructions,    setInstructions]    = useState(INIT_INSTRUCTIONS);
@@ -408,9 +412,26 @@ export default function App() {
     return out;
   }
 
+  // Записывает событие включения/выключения в историю (новые сверху)
+  function logEvent(verId, action) {
+    const ver = versions.find(v => v.id === verId);
+    const d = new Date();
+    setEnableLog(prev => [{
+      id: Date.now() + Math.random(),
+      versionLabel: ver ? ver.label : '',
+      action, // 'on' | 'off'
+      author: HISTORY_AUTHOR,
+      date: d.toLocaleDateString('ru-RU'),
+      time: d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+    }, ...prev]);
+  }
+
   // Применяет включение версии (выключая остальные)
   function doEnable(launching) {
+    const other = versions.find(v => v.id !== currentVersion && getS(v.id).enabled);
     setSettingsByVersion(prev => activateVersion(prev, currentVersion, launching ? { launched: true, dirty: false } : {}));
+    if (other) logEvent(other.id, 'off'); // прежняя версия автоматически выключается
+    logEvent(currentVersion, 'on');
     showToast('Бот запущен и работает');
   }
 
@@ -435,6 +456,7 @@ export default function App() {
     }
     // выключение текущей версии
     setSettingsByVersion(prev => ({ ...prev, [currentVersion]: { ...(prev[currentVersion] || BLANK_SETTINGS), enabled: false } }));
+    logEvent(currentVersion, 'off');
     showToast('Бот остановлен');
   }
 
@@ -545,9 +567,11 @@ export default function App() {
           <img src={usedeskLogo} width="32" height="32" alt="Usedesk" />
         </div>
         <div className="sb-nav">
-          {SIDEBAR_ICONS.map(({ id, Icon, label, active }) => (
+          {SIDEBAR_ICONS.map(({ id, Icon, label, active, dot, badge }) => (
             <button key={id} className={`sb-btn${active ? ' sb-btn--active' : ''}`} title={label}>
               <Icon size={24} strokeWidth={1.5} color="#ffffff" />
+              {dot && <span className="sb-dot" />}
+              {badge && <span className="sb-badge">{badge}</span>}
             </button>
           ))}
         </div>
@@ -590,7 +614,10 @@ export default function App() {
             )}
           </div>
           <div className="pheader__right">
-            <div className="avatar">КИ</div>
+            <div className="avatar-wrap">
+              <div className="avatar">НИ</div>
+              <span className="avatar__status" />
+            </div>
           </div>
         </header>
 
@@ -751,11 +778,16 @@ export default function App() {
                         Запустить бота
                       </button>
                     ) : (
-                      <button
-                        className={`btn${botEnabled ? ' btn--danger' : ' btn--primary'}`}
-                        onClick={toggleBot}>
-                        {botEnabled ? 'Выключить' : 'Включить'}
-                      </button>
+                      <div className="s-launch-group">
+                        <button
+                          className={`btn${botEnabled ? ' btn--danger' : ' btn--primary'}`}
+                          onClick={toggleBot}>
+                          {botEnabled ? 'Выключить' : 'Включить'}
+                        </button>
+                        <button className="s-icon-btn" title="История включений" onClick={() => setHistoryOpen(true)}>
+                          <History size={20} color="#464b54" strokeWidth={2} />
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1367,6 +1399,42 @@ export default function App() {
                 Обновить выбранные
               </button>
               <button className="btn btn--outline" onClick={() => setSelectiveOpen(false)}>Закрыть</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Шторка «История работы» — лог включений/выключений */}
+      {historyOpen && (
+        <div className="drawer-overlay" onClick={() => setHistoryOpen(false)}>
+          <div className="drawer" onClick={e => e.stopPropagation()}>
+            <div className="drawer__header">
+              <span className="drawer__title">История работы</span>
+              <button className="drawer__close" onClick={() => setHistoryOpen(false)}>
+                <X size={24} color="#676768" strokeWidth={2} />
+              </button>
+            </div>
+            <div className="drawer__content hist-content">
+              {enableLog.length === 0 ? (
+                <div className="hist-empty">Пока нет включений и выключений</div>
+              ) : enableLog.map((e, i) => (
+                <React.Fragment key={e.id}>
+                  {i > 0 && <div className="hist-divider" />}
+                  <div className="hist-row">
+                    <div className="hist-row__top">
+                      <span className="hist-row__ver">{e.versionLabel}</span>
+                      <span className="hist-row__author">
+                        <UserRound size={16} color="#5a5e66" strokeWidth={1.5} />
+                        {e.author}
+                      </span>
+                    </div>
+                    <div className="hist-row__bottom">
+                      <span className="hist-row__status">{e.action === 'on' ? 'Включена' : 'Выключена'}</span>
+                      <span className="hist-row__date">{e.date} {e.time}</span>
+                    </div>
+                  </div>
+                </React.Fragment>
+              ))}
             </div>
           </div>
         </div>
