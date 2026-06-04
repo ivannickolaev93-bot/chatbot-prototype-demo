@@ -19,12 +19,12 @@ const KNOWLEDGE_BASES = [
         id: 's1', name: 'Покупателю',
         categories: [
           {
-            id: 'c1', name: 'Для продаж',
+            id: 'c1', name: 'Заказы и доставка',
             articles: [
-              { id: 'a1', title: 'порядок обработки лидов копия', chars: 9,    locked: false },
-              { id: 'a2', title: 'порядок обработки лидов',       chars: 11,   locked: true  },
-              { id: 'a3', title: 'ааа',                            chars: 10,   locked: true  },
-              { id: 'a4', title: 'Цепочка правил',                 chars: 1407, locked: true  },
+              { id: 'a1', title: 'Как отследить статус заказа',     chars: 1240, locked: false, updated: true },
+              { id: 'a2', title: 'Сроки и стоимость доставки',      chars: 2680, locked: true,  updated: true },
+              { id: 'a3', title: 'Способы оплаты заказа',           chars: 1850, locked: true  },
+              { id: 'a4', title: 'Возврат и обмен товара',          chars: 3420, locked: true,  updated: true },
             ],
           },
         ],
@@ -33,24 +33,93 @@ const KNOWLEDGE_BASES = [
         id: 's2', name: 'Продавцу',
         categories: [
           {
-            id: 'c3', name: 'Основное',
+            id: 'c3', name: 'Работа с заказами',
             articles: [
-              { id: 'a5', title: 'Правила для продавцов', chars: 6, locked: false },
+              { id: 'a5', title: 'Как обрабатывать новые заказы', chars: 2150, locked: false },
             ],
           },
         ],
       },
     ],
   },
-  { id: 'kb2', name: 'база знаний 2', sections: [] },
-  { id: 'kb3', name: 'Тест',                      sections: [] },
-  { id: 'kb4', name: 'Интеграции',                sections: [] },
-  { id: 'kb5', name: 'Специально для бота',        sections: [] },
-  { id: 'kb6', name: 'Управление ролевой моделью', sections: [] },
-  { id: 'kb7', name: 'Документооборот',            sections: [] },
-  { id: 'kb8', name: 'Для сотрудников',            sections: [] },
-  { id: 'kb9', name: 'Прочее',                     sections: [] },
+  {
+    id: 'kb2', name: 'База знаний 2',
+    sections: [
+      {
+        id: 's3', name: 'Аккаунт и доступ',
+        categories: [
+          {
+            id: 'c4', name: 'Регистрация и вход',
+            articles: [
+              { id: 'a6', title: 'Как создать аккаунт',            chars: 980,  locked: false },
+              { id: 'a7', title: 'Восстановление пароля',          chars: 1340, locked: false, updated: true },
+              { id: 'a8', title: 'Двухфакторная аутентификация',   chars: 2110, locked: true  },
+            ],
+          },
+        ],
+      },
+      {
+        id: 's4', name: 'Технические вопросы',
+        categories: [
+          {
+            id: 'c5', name: 'Решение проблем',
+            articles: [
+              { id: 'a9',  title: 'Не приходят уведомления',  chars: 1620, locked: true, updated: true },
+              { id: 'a10', title: 'Ошибки при оплате',        chars: 2480, locked: true },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'kb3', name: 'Интеграции',
+    sections: [
+      {
+        id: 's5', name: 'Подключение каналов',
+        categories: [
+          {
+            id: 'c6', name: 'Каналы связи',
+            articles: [
+              { id: 'a11', title: 'Подключение Telegram', chars: 2500, locked: false },
+              { id: 'a12', title: 'Подключение WhatsApp', chars: 2500, locked: true  },
+              { id: 'a13', title: 'Подключение почты',    chars: 2500, locked: false },
+              { id: 'a14', title: 'Чат на сайте',         chars: 2500, locked: false },
+            ],
+          },
+        ],
+      },
+      {
+        id: 's6', name: 'Работа с обращениями',
+        categories: [
+          {
+            id: 'c7', name: 'Виджет',
+            articles: [
+              { id: 'a15', title: 'Подключение виджета',   chars: 1000, locked: false, updated: true },
+              { id: 'a16', title: 'Блок «Виджет»',         chars: 1000, locked: false },
+              { id: 'a17', title: 'Кнопки в чате виджета', chars: 1000, locked: true,  updated: true },
+            ],
+          },
+          {
+            id: 'c8', name: 'Автоматизация',
+            articles: [
+              { id: 'a18', title: 'Триггеры', chars: 5000, locked: false },
+              { id: 'a19', title: 'Макросы',  chars: 5000, locked: true, updated: true },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  { id: 'kb4', name: 'Документооборот', sections: [] },
 ];
+
+// id статей с непримененными обновлениями — стартовый набор берём из флага updated в данных.
+// Гасится при «Обновить все» (дообучение применяет обновления).
+const INITIAL_UPDATED_IDS = KNOWLEDGE_BASES
+  .flatMap(kb => kb.sections.flatMap(s => s.categories.flatMap(c => c.articles)))
+  .filter(a => a.updated)
+  .map(a => a.id);
 
 const VERSION_AUTHOR = 'Константин Иванов';
 
@@ -150,9 +219,9 @@ export default function App() {
   const [activeTab,       setActiveTab]       = useState('training');
   const [botStatus,       setBotStatus]       = useState('untrained');
   const [selected,        setSelected]        = useState(new Set());
-  const [expandedKbs,     setExpandedKbs]     = useState(new Set(['kb1']));
-  const [expandedSecs,    setExpandedSecs]    = useState(new Set(['s1']));
-  const [expandedCats,    setExpandedCats]    = useState(new Set(['c1']));
+  const [expandedKbs,     setExpandedKbs]     = useState(new Set()); // всё свёрнуто на старте — раскрывается по клику
+  const [expandedSecs,    setExpandedSecs]    = useState(new Set());
+  const [expandedCats,    setExpandedCats]    = useState(new Set());
   const [showPublicOnly,  setShowPublicOnly]  = useState(false);
   const [search,          setSearch]          = useState('');
   const [files,           setFiles]           = useState([]);
@@ -162,7 +231,9 @@ export default function App() {
   const [botTyping,       setBotTyping]       = useState(null); // id версии, в чате которой бот печатает
   const [testingLoading,  setTestingLoading]  = useState(false);
   const [trainedSnapshot, setTrainedSnapshot] = useState(null); // Set of article ids at training time
+  const [updatedIds,      setUpdatedIds]      = useState(() => new Set(INITIAL_UPDATED_IDS)); // статьи с непримененными обновлениями
   const [updateHover,     setUpdateHover]     = useState(false);
+  const [updBannerClosed, setUpdBannerClosed] = useState(false); // плашка обновлений закрыта крестиком
   const messagesEndRef = useRef(null);
 
   // Settings state — свои настройки у каждой версии
@@ -208,6 +279,15 @@ export default function App() {
 
   const isTrained  = botStatus === 'trained';
   const isTraining = botStatus === 'training';
+  // бот хоть раз обучался: версия уже создана. При первом обучении версии ещё нет —
+  // вкладки настроек/инструкций появляются только после него. При дообучении версия есть,
+  // поэтому эти вкладки не исчезают на время прогона.
+  const everTrained = versions.length > 0;
+  const allArticles = KNOWLEDGE_BASES.flatMap(kb => kb.sections.flatMap(s => s.categories.flatMap(c => c.articles)));
+  // Точка/плашка — только для УЖЕ ОБУЧЕННЫХ материалов, в которых появилось обновление.
+  // trainedSnapshot — набор статей на момент обучения; updated — у статьи есть обновление.
+  const articleHasUpdate = (a) => everTrained && updatedIds.has(a.id) && trainedSnapshot !== null && trainedSnapshot.has(a.id);
+  const hasUpdates = allArticles.some(articleHasUpdate);
   const hasFiles   = files.some(f => f.status === 'uploaded');
 
   // total selected article chars across all KBs
@@ -236,6 +316,7 @@ export default function App() {
 
   function startTraining() {
     setTrainedSnapshot(new Set(selected));
+    setUpdBannerClosed(false); // новый прогон — плашка снова актуальна, сбрасываем «закрыто крестиком»
     setUpdateHover(false);
     setTrainHover(false);
     setBotStatus('training');
@@ -259,6 +340,17 @@ export default function App() {
         return [...prev, newVer];
       });
     }, 3500);
+  }
+
+  // «Обновить все»: применяем обновления ТОЛЬКО обученных материалов и дообучаем бота (новая версия).
+  // Обновления в других базах, которые не обучали, остаются нетронутыми.
+  function updateAll() {
+    setUpdatedIds(prev => {
+      const n = new Set(prev);
+      if (trainedSnapshot) trainedSnapshot.forEach(id => n.delete(id)); // гасим только то, на чём обучались
+      return n;
+    });
+    startTraining();               // дообучение + новая версия бота
   }
 
   // есть новые материалы по сравнению со снимком на момент обучения
@@ -451,9 +543,6 @@ export default function App() {
               <span className={`ver-dot${botEnabled ? ' ver-dot--on' : ''}`} />
               <span>{ver?.label}</span>
               <span className="ico-chev">▾</span>
-              {versions.length < 2 && verHover && (
-                <div className="ver-tooltip">После дообучения создаётся новая версия бота</div>
-              )}
               {versionOpen && versions.length >= 2 && (
                 <div className="ver-drop" onClick={e => e.stopPropagation()}>
                   <div className="ver-drop__header">версии бота</div>
@@ -489,7 +578,7 @@ export default function App() {
               .filter(({ showWhen }) =>
                 showWhen === 'always' ||
                 (showWhen === 'started' && botStatus !== 'untrained') ||
-                (showWhen === 'trained' && isTrained)
+                (showWhen === 'trained' && everTrained)
               )
               .map(({ id, label, Icon }) => (
                 <button key={id}
@@ -652,7 +741,7 @@ export default function App() {
 
                     {/* Bot name */}
                     <div className="s-field">
-                      <label className="s-label">Имя бота *</label>
+                      <label className="s-label">Имя бота <span className="req-star">*</span></label>
                       <input
                         className={`s-input${errors.botName ? ' s-input--error' : ''}`}
                         placeholder="Введите имя бота"
@@ -669,7 +758,7 @@ export default function App() {
 
                     {/* Channels */}
                     <div className="s-field">
-                      <label className="s-label">Каналы, в которых будет отвечать чат-бот *</label>
+                      <label className="s-label">Каналы, в которых будет отвечать чат-бот <span className="req-star">*</span></label>
                       <div className={`s-multiselect${errors.channels ? ' s-multiselect--error' : ''}`} ref={channelsRef} onClick={() => setShowChannelsDrop(p => !p)}>
                         <div className="s-multiselect__tags">
                           {channels.length === 0
@@ -716,7 +805,7 @@ export default function App() {
 
                     {/* Assignees */}
                     <div className="s-field">
-                      <label className="s-label">На кого назначать запросы *</label>
+                      <label className="s-label">На кого назначать запросы <span className="req-star">*</span></label>
                       <div className={`s-multiselect${errors.assignees ? ' s-multiselect--error' : ''}`} ref={assignRef} onClick={() => setShowAssignDrop(p => !p)}>
                         <div className="s-multiselect__tags">
                           {assignees.length === 0
@@ -883,15 +972,44 @@ export default function App() {
                     </label>
                   </div>
 
+                  {/* Плашка обновлений */}
+                  {hasUpdates && !updBannerClosed && (
+                    <div className="upd-banner">
+                      <div className="upd-banner__head">
+                        <div className="upd-banner__head-left">
+                          <Info size={16} color="#3060bf" strokeWidth={1.5} />
+                          <span className="upd-banner__title">В выбранных материалах есть обновления</span>
+                        </div>
+                        <button className="upd-banner__close" onClick={() => setUpdBannerClosed(true)}>
+                          <X size={16} color="#83868c" strokeWidth={1.5} />
+                        </button>
+                      </div>
+                      <div className="upd-banner__body">
+                        <span className="upd-banner__text">
+                          Хотите применить их сразу? При этом будет создана новая версия бота
+                        </span>
+                        <div className="upd-banner__actions">
+                          <button className="btn btn--primary btn--sm" onClick={updateAll}>Обновить все</button>
+                          <button className="btn btn--outline btn--sm">Обновить выборочно</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── KB list ── */}
                   {KNOWLEDGE_BASES.map(kb => {
                     const kbArticleIds = kb.sections.flatMap(s => s.categories.flatMap(c => c.articles.map(a => a.id)));
                     const kbSelIds     = kbArticleIds.filter(id => selected.has(id));
                     const kbSelChars   = kb.sections.flatMap(s => s.categories.flatMap(c => c.articles))
                                           .filter(a => selected.has(a.id)).reduce((acc, a) => acc + a.chars, 0);
+                    const kbTotalChars = kb.sections.flatMap(s => s.categories.flatMap(c => c.articles))
+                                          .reduce((acc, a) => acc + a.chars, 0);
+                    const hasSelection = kbSelIds.length > 0;
                     const kbState      = checkState(kbArticleIds, selected);
                     const isKbOpen     = expandedKbs.has(kb.id);
                     const hasContent   = kb.sections.length > 0;
+                    // точка-маркер: на уровне есть обновления, если хоть одна обученная статья внутри обновлена
+                    const kbHasUpdates = kb.sections.some(s => s.categories.some(c => c.articles.some(articleHasUpdate)));
 
                     const toggleKbOpen = () => {
                       if (!hasContent) return;
@@ -902,6 +1020,7 @@ export default function App() {
                       <div key={kb.id} className="kb-card">
                         {/* KB header row */}
                         <div className={`kb-card__hdr${isKbOpen ? ' kb-card__hdr--open' : ''}`} onClick={toggleKbOpen}>
+                          {kbHasUpdates && <span className="upd-dot" title="Есть обновления" />}
                           <span className="kb-card__name">{kb.name}</span>
                           {!isKbOpen && (
                             <span className={`kb-card__status${kbSelIds.length > 0 ? '' : ' kb-card__status--empty'}`}>
@@ -934,11 +1053,15 @@ export default function App() {
                                 onClick={e => toggleGroup(kbArticleIds, e)}
                               />
                               <span className="kb-summary__count">
-                                Выбрано статей: <b>{kbSelIds.length} / {kbArticleIds.length}</b>
+                                {hasSelection
+                                  ? <>Выбрано статей: <b>{kbSelIds.length} / {kbArticleIds.length}</b></>
+                                  : 'Выбрать все'}
                               </span>
                             </div>
                             <span className="kb-summary__chars">
-                              Всего символов в выбранных статьях: <b>{fmtN(kbSelChars)}</b>
+                              {hasSelection
+                                ? <>Всего символов в выбранных статьях: <b>{fmtN(kbSelChars)}</b></>
+                                : <>Всего символов в базе знаний: <b>{fmtN(kbTotalChars)}</b></>}
                             </span>
                           </div>
 
@@ -955,6 +1078,7 @@ export default function App() {
                                                   .filter(a => selected.has(a.id)).reduce((acc, a) => acc + a.chars, 0);
                                 const totalSecChars = section.categories.flatMap(c => c.articles).reduce((acc, a) => acc + a.chars, 0);
                                 const isSecOpen = expandedSecs.has(section.id);
+                                const secHasUpdates = section.categories.some(c => c.articles.some(articleHasUpdate));
 
                                 return (
                                   <div key={section.id} className={`tree-section${isSecOpen ? ' tree-section--open' : ''}`}>
@@ -969,6 +1093,7 @@ export default function App() {
                                         checked={secState === 'all'} indeterminate={secState === 'some'}
                                         onClick={e => toggleGroup(secIds, e)}
                                       />
+                                      {secHasUpdates && <span className="upd-dot" title="Есть обновления" />}
                                       <div className="tree-section__label">
                                         <span className="tree-section__tag">Раздел</span>
                                         <span className="tree-section__name">{section.name}</span>
@@ -988,6 +1113,7 @@ export default function App() {
                                           const catChars = cat.articles.filter(a => selected.has(a.id)).reduce((acc, a) => acc + a.chars, 0);
                                           const totalCatChars = cat.articles.reduce((acc, a) => acc + a.chars, 0);
                                           const isCatOpen = expandedCats.has(cat.id);
+                                          const catHasUpdates = cat.articles.some(articleHasUpdate);
 
                                           return (
                                             <div key={cat.id} className="tree-cat">
@@ -1002,6 +1128,7 @@ export default function App() {
                                                   checked={catState === 'all'} indeterminate={catState === 'some'}
                                                   onClick={e => toggleGroup(catIds, e)}
                                                 />
+                                                {catHasUpdates && <span className="upd-dot" title="Есть обновления" />}
                                                 <span className="tree-cat__name">{cat.name}</span>
                                                 <span className="tree-chars">{fmtN(catChars > 0 ? catChars : totalCatChars)}</span>
                                                 <span className="ico-chev">{isCatOpen ? '▲' : '▼'}</span>
@@ -1018,6 +1145,9 @@ export default function App() {
                                                       checked={selected.has(article.id)}
                                                       onClick={e => { e.stopPropagation(); toggle(article.id); }}
                                                     />
+                                                    {articleHasUpdate(article) && (
+                                                      <span className="upd-dot" title="В статье есть обновления" />
+                                                    )}
                                                     <span className="tree-article__title">{article.title}</span>
                                                     {article.locked && <Lock size={13} color="#959696" strokeWidth={1.5} />}
                                                     <span className="tree-chars">{fmtN(article.chars)}</span>
@@ -1144,12 +1274,12 @@ export default function App() {
             </div>
             <div className="drawer__content">
               <div className="s-field">
-                <label className="s-label">Название инструкции *</label>
+                <label className="s-label">Название инструкции <span className="req-star">*</span></label>
                 <input className="s-input" placeholder="Введите название"
                   value={drawer.name} onChange={e => setDrawer(d => ({ ...d, name: e.target.value }))} />
               </div>
               <div className="s-field">
-                <label className="s-label">Текст инструкции *</label>
+                <label className="s-label">Текст инструкции <span className="req-star">*</span></label>
                 <div className="s-textarea-wrap">
                   <textarea className="s-textarea drawer__textarea" placeholder="Введите текст инструкции"
                     maxLength={1000} value={drawer.text}

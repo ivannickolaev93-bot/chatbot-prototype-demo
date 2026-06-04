@@ -269,6 +269,29 @@ body {
 
 .tree-chars { font-size: 12px; color: #676768; white-space: nowrap; flex-shrink: 0; }
 
+/* Маркер обновления (точка) — на любом уровне материала */
+.upd-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #3d79f2; flex-shrink: 0;
+}
+/* Плашка «есть обновления» — Alert/Custom по макету */
+.upd-banner {
+  margin: 0 24px 16px;
+  padding: 16px;
+  background: #ecf2fe; border: 1px solid #b1c9fa; border-radius: 8px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.upd-banner__head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.upd-banner__head-left { display: flex; align-items: center; gap: 12px; }
+.upd-banner__title { font-size: 14px; font-weight: 500; color: #3060bf; }
+.upd-banner__close {
+  background: none; border: none; padding: 0; cursor: pointer;
+  display: flex; flex-shrink: 0;
+}
+.upd-banner__body { display: flex; flex-direction: column; gap: 16px; }
+.upd-banner__text { font-size: 14px; font-weight: 400; color: #3060bf; }
+.upd-banner__actions { display: flex; gap: 8px; }
+
 /* Section */
 .tree-section { border-bottom: 1px solid #e4e7ec; }
 .tree-section:last-child { border-bottom: none; }
@@ -277,9 +300,9 @@ body {
 .tree-section--open {
   border-bottom: none;
   margin: 6px;
-  border: 1px solid #c7d8fb;
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: #ecf2fe;
+  background: transparent;
 }
 
 .tree-section__hdr {
@@ -298,26 +321,26 @@ body {
 
 /* Category */
 .tree-cat {
-  background: #ecf2fe; border: 1px solid #c7d8fb;
+  background: transparent; border: 1px solid transparent;
   border-radius: 6px;
 }
 
 .tree-cat__hdr {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 12px; cursor: pointer; border-radius: 6px;
+  padding: 10px 12px 10px 32px; cursor: pointer; border-radius: 6px;
   transition: background 0.1s;
 }
-.tree-cat__hdr:hover { background: rgba(61,121,242,0.06); }
+.tree-cat__hdr:hover { background: rgba(0,0,0,0.02); }
 .tree-cat__name { flex: 1; font-size: 14px; color: #222427; }
 
 /* Article */
 .tree-article {
   display: flex; align-items: center; gap: 12px;
-  padding: 7px 12px 7px 40px;
+  padding: 7px 12px 7px 56px;
   cursor: pointer; transition: background 0.1s;
-  border-top: 1px solid rgba(61,121,242,0.12);
+  border-top: 1px solid #eceef1;
 }
-.tree-article:hover { background: rgba(61,121,242,0.06); }
+.tree-article:hover { background: rgba(0,0,0,0.02); }
 .tree-article__title { flex: 1; font-size: 14px; color: #505051; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Files ─────────────────────────────────────────────────────────────────── */
@@ -466,6 +489,7 @@ body {
 .s-field { display: flex; flex-direction: column; gap: 4px; }
 
 .s-label { font-size: 14px; color: #505051; padding: 0 4px; }
+.req-star { color: #ff2640; }
 
 .s-input {
   height: 40px; padding: 0 12px;
@@ -641,22 +665,25 @@ body {
 
 /* Empty state */
 .instr-empty-wrap {
-  width: 100%; max-width: 800px;
-  display: flex; justify-content: center;
+  width: 100%;
+  display: flex; justify-content: center; align-items: center;
   padding-top: 8px;
 }
 
 .instr-empty-card {
   width: 560px; background: #fff; border-radius: 16px;
-  padding: 24px;
-  display: flex; flex-direction: column; gap: 24px;
+  padding: 32px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 24px;
 }
 
-.instr-empty-card__info { display: flex; flex-direction: column; gap: 8px; }
-.instr-empty-card__title { font-size: 14px; font-weight: 500; color: #222427; }
-.instr-empty-card__text { font-size: 12px; color: #676768; line-height: 1.5; }
+.instr-empty-card__info {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center;
+}
+.instr-empty-card__title { font-size: 15px; font-weight: 500; color: #4a4d50; }
+.instr-empty-card__text { font-size: 13px; color: #676768; line-height: 1.5; max-width: 480px; }
 
-.instr-empty-card .btn { align-self: flex-start; }
+.instr-empty-card .btn { align-self: center; }
 
 /* Instruction list */
 .instr-list { display: flex; flex-direction: column; gap: 8px; }
@@ -892,8 +919,9 @@ body {
 }
 
 .btn--primary  { background: #3d79f2; color: #fff; }
-.btn--primary:hover  { background: #2f6be0; }
+.btn--primary:not(:disabled):hover  { background: #2f6be0; }
 
+.btn:disabled { background: #c4c8cd; color: #fff; cursor: not-allowed; }
 .btn--disabled { background: #959696; color: #fff; cursor: not-allowed; }
 
 .btn--secondary { background: #f4f5f5; color: #222427; border: 1px solid #d9d9d9; }
