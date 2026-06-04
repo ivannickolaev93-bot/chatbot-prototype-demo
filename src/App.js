@@ -232,6 +232,9 @@ export default function App() {
   const [testingLoading,  setTestingLoading]  = useState(false);
   const [trainedSnapshot, setTrainedSnapshot] = useState(null); // Set of article ids at training time
   const [updatedIds,      setUpdatedIds]      = useState(() => new Set(INITIAL_UPDATED_IDS)); // статьи с непримененными обновлениями
+  const [selectiveOpen,   setSelectiveOpen]   = useState(false); // шторка «Обновить выборочно»
+  const [selectiveChecked,setSelectiveChecked]= useState(new Set()); // отмеченные в шторке статьи
+  const [selectivePublicOnly, setSelectivePublicOnly] = useState(false); // тумблер в шторке
   const [updateHover,     setUpdateHover]     = useState(false);
   const [updBannerClosed, setUpdBannerClosed] = useState(false); // плашка обновлений закрыта крестиком
   const messagesEndRef = useRef(null);
@@ -288,6 +291,10 @@ export default function App() {
   // trainedSnapshot — набор статей на момент обучения; updated — у статьи есть обновление.
   const articleHasUpdate = (a) => everTrained && updatedIds.has(a.id) && trainedSnapshot !== null && trainedSnapshot.has(a.id);
   const hasUpdates = allArticles.some(articleHasUpdate);
+  // обновлённые статьи, сгруппированные по БЗ — для шторки «Обновить выборочно» (без вложенности разделов/категорий)
+  const updatedByKb = KNOWLEDGE_BASES
+    .map(kb => ({ kb, articles: kb.sections.flatMap(s => s.categories.flatMap(c => c.articles)).filter(articleHasUpdate) }))
+    .filter(g => g.articles.length > 0);
   const hasFiles   = files.some(f => f.status === 'uploaded');
 
   // total selected article chars across all KBs
@@ -351,6 +358,22 @@ export default function App() {
       return n;
     });
     startTraining();               // дообучение + новая версия бота
+  }
+
+  // «Обновить выборочно»: открываем шторку, по умолчанию отмечены все обновлённые обученные статьи
+  function openSelective() {
+    setSelectiveChecked(new Set(allArticles.filter(articleHasUpdate).map(a => a.id)));
+    setSelectivePublicOnly(false);
+    setSelectiveOpen(true);
+  }
+  function toggleSelective(id) {
+    setSelectiveChecked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  // Применяем обновления только отмеченных статей + дообучение (новая версия). Снятые сохраняют точки.
+  function updateSelected() {
+    setUpdatedIds(prev => { const n = new Set(prev); selectiveChecked.forEach(id => n.delete(id)); return n; });
+    setSelectiveOpen(false);
+    startTraining();
   }
 
   // есть новые материалы по сравнению со снимком на момент обучения
@@ -990,7 +1013,7 @@ export default function App() {
                         </span>
                         <div className="upd-banner__actions">
                           <button className="btn btn--primary btn--sm" onClick={updateAll}>Обновить все</button>
-                          <button className="btn btn--outline btn--sm">Обновить выборочно</button>
+                          <button className="btn btn--outline btn--sm" onClick={openSelective}>Обновить выборочно</button>
                         </div>
                       </div>
                     </div>
@@ -1081,7 +1104,7 @@ export default function App() {
                                 const secHasUpdates = section.categories.some(c => c.articles.some(articleHasUpdate));
 
                                 return (
-                                  <div key={section.id} className={`tree-section${isSecOpen ? ' tree-section--open' : ''}`}>
+                                  <div key={section.id} className={`tree-section${isSecOpen ? ' tree-section--open' : ''}${secState !== 'none' ? ' tree-section--selected' : ''}`}>
                                     {/* Section header */}
                                     <div className="tree-section__hdr"
                                       onClick={() => setExpandedSecs(prev => {
@@ -1116,7 +1139,7 @@ export default function App() {
                                           const catHasUpdates = cat.articles.some(articleHasUpdate);
 
                                           return (
-                                            <div key={cat.id} className="tree-cat">
+                                            <div key={cat.id} className={`tree-cat${catState !== 'none' ? ' tree-cat--selected' : ''}`}>
                                               {/* Category header */}
                                               <div className="tree-cat__hdr"
                                                 onClick={() => setExpandedCats(prev => {
@@ -1295,6 +1318,55 @@ export default function App() {
                 Сохранить
               </button>
               <button className="btn btn--outline" onClick={() => setDrawer(null)}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Шторка «Материалы с обновлениями» — «Обновить выборочно» */}
+      {selectiveOpen && (
+        <div className="drawer-overlay" onClick={() => setSelectiveOpen(false)}>
+          <div className="drawer" onClick={e => e.stopPropagation()}>
+            <div className="upd-drawer__head">
+              <div className="upd-drawer__head-top">
+                <span className="drawer__title">Материалы с обновлениями</span>
+                <button className="drawer__close" onClick={() => setSelectiveOpen(false)}>
+                  <X size={24} color="#505051" strokeWidth={2} />
+                </button>
+              </div>
+              <label className="toggle-row" onClick={() => setSelectivePublicOnly(p => !p)}>
+                <span className={`sw${selectivePublicOnly ? ' sw--on' : ''}`}><span className="sw__knob" /></span>
+                <span className="toggle-label">Показывать только публичные</span>
+              </label>
+            </div>
+            <div className="drawer__content upd-drawer__content">
+              {updatedByKb.map(({ kb, articles }) => {
+                const shown = articles.filter(a => !selectivePublicOnly || !a.locked);
+                if (!shown.length) return null;
+                return (
+                  <div key={kb.id} className="upd-drawer__group">
+                    <div className="upd-drawer__kb">{kb.name}</div>
+                    <div className="upd-drawer__list">
+                      {shown.map(a => (
+                        <div key={a.id} className="upd-drawer__row" onClick={() => toggleSelective(a.id)}>
+                          <CB checked={selectiveChecked.has(a.id)}
+                            onClick={e => { e.stopPropagation(); toggleSelective(a.id); }} />
+                          <span className="upd-drawer__title">{a.title}</span>
+                          {a.locked && <Lock size={16} color="#676768" strokeWidth={1.5} />}
+                          <span className="upd-drawer__chars">{fmtN(a.chars)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="upd-drawer__actions">
+              <button className="btn btn--primary" onClick={updateSelected}
+                disabled={selectiveChecked.size === 0}>
+                Обновить выбранные
+              </button>
+              <button className="btn btn--outline" onClick={() => setSelectiveOpen(false)}>Закрыть</button>
             </div>
           </div>
         </div>

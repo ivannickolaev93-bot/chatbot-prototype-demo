@@ -25,3 +25,4 @@ yarn-error.log*
 # dev artifacts
 dev-server.log
 figma-node.json
+figma-*.json
