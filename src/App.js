@@ -7,7 +7,7 @@ import {
   FileText, Inbox, Zap, Code2, Bot, ClipboardPen, Settings, Info,
   Lock, X, BookOpen, MessageSquareText, BookText, Camera, Check,
   CircleAlert, TriangleAlert, Pencil, Trash2, Plus, Search as SearchIcon,
-  History, Sparkle,
+  History, Sparkle, CircleX, CircleCheck,
 } from 'lucide-react';
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -152,9 +152,9 @@ const SIDEBAR_ICONS = [
 ];
 
 const NAV_ITEMS = [
-  { id: 'settings',     label: 'Настройки',        Icon: Settings,          showWhen: 'trained'  },
   { id: 'training',     label: 'Обучение',          Icon: BookOpen,          showWhen: 'always'   },
   { id: 'testing',      label: 'Тестирование',      Icon: MessageSquareText, showWhen: 'started'  },
+  { id: 'settings',     label: 'Настройки',        Icon: Settings,          showWhen: 'trained'  },
   { id: 'instructions', label: 'Особые инструкции', Icon: BookText,          showWhen: 'trained'  },
 ];
 
@@ -245,9 +245,12 @@ export default function App() {
   const [settingsByVersion, setSettingsByVersion] = useState({}); // { [versionId]: BLANK_SETTINGS }
   const [showChannelsDrop,setShowChannelsDrop]= useState(false);
   const [showAssignDrop,  setShowAssignDrop]  = useState(false);
+  const [saveState,       setSaveState]       = useState(null); // null | 'saving' | 'saved'
   const [toast,           setToast]           = useState(null); // { text, type }
   const [confirmEnable,   setConfirmEnable]   = useState(null); // { otherLabel, launching } — модалка конфликта версий
   const [historyOpen,     setHistoryOpen]     = useState(false); // шторка «История работы»
+  const [botEverLaunched, setBotEverLaunched] = useState(false); // бот хоть раз запускался
+  const [infoOpen,        setInfoOpen]        = useState(false); // панель статусов запуска
   const [enableLog,       setEnableLog]       = useState([]); // { id, versionLabel, action: 'on'|'off', author, date, time }
 
   // Особые инструкции — общие для всех версий
@@ -261,6 +264,7 @@ export default function App() {
   const channelsRef = useRef(null);
   const assignRef   = useRef(null);
   const versionRef  = useRef(null);
+  const infoRef     = useRef(null);
   const [versionOpen,     setVersionOpen]     = useState(false);
   const [verHover,        setVerHover]        = useState(false);
   const [versions,        setVersions]        = useState([]); // { id, label, status, date, time, author } — реальное время создания
@@ -326,6 +330,7 @@ export default function App() {
   }
 
   function startTraining() {
+    const prevVersionId = currentVersion; // захватываем до async — нужен для наследования настроек
     setTrainedSnapshot(new Set(selected));
     setUpdBannerClosed(false); // новый прогон — плашка снова актуальна, сбрасываем «закрыто крестиком»
     setUpdateHover(false);
@@ -348,6 +353,25 @@ export default function App() {
           author: VERSION_AUTHOR,
         };
         setCurrentVersion(newVer.id); // активна новая версия
+        setSettingsByVersion(prevS => {
+          const prev = prevVersionId ? (prevS[prevVersionId] || BLANK_SETTINGS) : BLANK_SETTINGS;
+          const inherited = !!prevVersionId;
+          return {
+            ...prevS,
+            [newVer.id]: {
+              botName: prev.botName,
+              channels: [...prev.channels],
+              assignees: [...prev.assignees],
+              transferText: prev.transferText,
+              avatarUrl: prev.avatarUrl,
+              launched: inherited,
+              enabled: false,
+              dirty: false,
+              saved: inherited,
+              errors: {},
+            },
+          };
+        });
         return [...prev, newVer];
       });
     }, 3500);
@@ -430,7 +454,8 @@ export default function App() {
   function doEnable(launching) {
     const other = versions.find(v => v.id !== currentVersion && getS(v.id).enabled);
     setSettingsByVersion(prev => activateVersion(prev, currentVersion, launching ? { launched: true, dirty: false } : {}));
-    if (other) logEvent(other.id, 'off'); // прежняя версия автоматически выключается
+    if (launching) setBotEverLaunched(true);
+    if (other) logEvent(other.id, 'off');
     logEvent(currentVersion, 'on');
     showToast('Бот запущен и работает');
   }
@@ -471,13 +496,16 @@ export default function App() {
       return;
     }
 
-    updateS({ errors: {}, dirty: false, saved: true });
-    showToast('Настройки сохранены');
+    setSaveState('saving');
+    setTimeout(() => {
+      updateS({ errors: {}, dirty: false, saved: true });
+      setSaveState('saved');
+      setTimeout(() => setSaveState(null), 2000);
+    }, 1000);
   }
 
-  // Кнопка «Сохранить» всегда кликабельна — валидация срабатывает при нажатии
-  const canSave   = true;
-  const canLaunch = settingsSaved && !settingsDirty;
+  const canSave   = settingsDirty && botName.trim() !== '' && channels.length > 0 && assignees.length > 0;
+  const canLaunch = settingsSaved && versions.length > 0;
 
   function handleAvatarChange(e) {
     const file = e.target.files[0];
@@ -533,6 +561,7 @@ export default function App() {
       if (channelsRef.current && !channelsRef.current.contains(e.target)) setShowChannelsDrop(false);
       if (assignRef.current   && !assignRef.current.contains(e.target))   setShowAssignDrop(false);
       if (versionRef.current  && !versionRef.current.contains(e.target))  setVersionOpen(false);
+      if (infoRef.current     && !infoRef.current.contains(e.target))     setInfoOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -581,36 +610,88 @@ export default function App() {
         {/* ── Page header ── */}
         <header className="pheader">
           <div className="pheader__left">
-            <span className="pheader__title">Чат-бот первой линии</span>
-            {versions.length >= 1 && (
-            <div className="ver-btn" ref={versionRef}
-              onClick={() => versions.length >= 2 && setVersionOpen(v => !v)}
-              onMouseEnter={() => setVerHover(true)}
-              onMouseLeave={() => setVerHover(false)}>
-              <span className={`ver-dot${botEnabled ? ' ver-dot--on' : ''}`} />
-              <span>{ver?.label}</span>
-              <span className="ico-chev">▾</span>
-              {versionOpen && versions.length >= 2 && (
-                <div className="ver-drop" onClick={e => e.stopPropagation()}>
-                  <div className="ver-drop__header">версии бота</div>
-                  {[...versions].slice(-2).reverse().map(v => (
-                    <div key={v.id}
-                      className={`ver-drop__row${v.id === currentVersion ? ' ver-drop__row--active' : ''}`}
-                      onClick={() => { setCurrentVersion(v.id); setVersionOpen(false); }}>
-                      <div className="ver-drop__name">
-                        <span className={`ver-dot${getS(v.id).enabled ? ' ver-dot--on' : ''}`} />
-                        {v.label}
+            <span className="pheader__title">ИИ Чат-бот</span>
+            {!botEverLaunched ? (
+              <div className="launch-header-group">
+                <button
+                  className={`btn btn--sm${canLaunch ? ' btn--primary' : ' btn--save-disabled'}`}
+                  onClick={canLaunch ? launchBot : undefined}
+                  disabled={!canLaunch}>
+                  Запустить бота
+                </button>
+                <div className="info-icon-wrap" ref={infoRef}
+                  onClick={e => { e.stopPropagation(); setInfoOpen(o => !o); }}>
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{cursor:'pointer'}}>
+                    <path d="M0 6C0 2.68629 2.68629 0 6 0H26C29.3137 0 32 2.68629 32 6V26C32 29.3137 29.3137 32 26 32H6C2.68629 32 0 29.3137 0 26V6Z" fill="#E0E1E3"/>
+                    <path d="M16.0002 18.6666V15.9999M16.0002 13.3333H16.0068M22.6668 15.9999C22.6668 19.6818 19.6821 22.6666 16.0002 22.6666C12.3183 22.6666 9.3335 19.6818 9.3335 15.9999C9.3335 12.318 12.3183 9.33325 16.0002 9.33325C19.6821 9.33325 22.6668 12.318 22.6668 15.9999Z" stroke="#313640" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  {infoOpen && (
+                    <div className="info-panel" onClick={e => e.stopPropagation()}>
+                      <button className="info-panel__close" onClick={() => setInfoOpen(false)}>
+                        <svg width="10" height="10" viewBox="377 41 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M387 41L377 51M377 41L387 51" stroke="#676768" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                      <div className="info-panel__row">
+                        {settingsSaved ? (
+                          <svg width="18" height="18" viewBox="40.917 68.917 18.167 18.167" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M50 68.917C55.0163 68.9172 59.0838 72.9837 59.084 78C59.0838 83.0163 55.0163 87.0838 50 87.084C44.9837 87.0838 40.9172 83.0163 40.917 78C40.9172 72.9837 44.9837 68.9172 50 68.917ZM54.0635 75.7334C53.6858 75.3305 53.0523 75.3098 52.6494 75.6875L48.8887 79.2129L47.3506 77.7705C46.9477 77.3931 46.3151 77.4136 45.9375 77.8164C45.5598 78.2193 45.5805 78.8518 45.9834 79.2295L48.2051 81.3135C48.5897 81.6737 49.1887 81.6739 49.5732 81.3135L54.0176 77.1465C54.4202 76.769 54.4406 76.1363 54.0635 75.7334Z" fill="#05BE23"/>
+                          </svg>
+                        ) : (
+                          <svg width="18" height="18" viewBox="40.917 36.917 18.167 18.167" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M50 36.917C55.0163 36.9172 59.0838 40.9837 59.084 46C59.0838 51.0163 55.0163 55.0838 50 55.084C44.9837 55.0838 40.9172 51.0163 40.917 46C40.9172 40.9837 44.9837 36.9172 50 36.917ZM53.207 42.793C52.8165 42.4024 52.1835 42.4024 51.793 42.793L50 44.5859L48.207 42.793C47.8165 42.4024 47.1835 42.4024 46.793 42.793C46.4024 43.1835 46.4024 43.8165 46.793 44.207L48.5859 46L46.793 47.793C46.4024 48.1835 46.4024 48.8165 46.793 49.207C47.1835 49.5976 47.8165 49.5976 48.207 49.207L50 47.4141L51.793 49.207C52.1835 49.5976 52.8165 49.5976 53.207 49.207C53.5976 48.8165 53.5976 48.1835 53.207 47.793L51.4141 46L53.207 44.207C53.5976 43.8165 53.5976 43.1835 53.207 42.793Z" fill="#ADAFB3"/>
+                          </svg>
+                        )}
+                        <span className="info-panel__label">Настройки</span>
                       </div>
-                      <div className="ver-drop__meta">
-                        <span className="ver-drop__status">{v.status}</span>
-                        <span>{v.date}, {v.time}</span>
-                        <span>{v.author}</span>
+                      <div className="info-panel__row">
+                        {versions.length > 0 ? (
+                          <svg width="18" height="18" viewBox="40.917 68.917 18.167 18.167" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M50 68.917C55.0163 68.9172 59.0838 72.9837 59.084 78C59.0838 83.0163 55.0163 87.0838 50 87.084C44.9837 87.0838 40.9172 83.0163 40.917 78C40.9172 72.9837 44.9837 68.9172 50 68.917ZM54.0635 75.7334C53.6858 75.3305 53.0523 75.3098 52.6494 75.6875L48.8887 79.2129L47.3506 77.7705C46.9477 77.3931 46.3151 77.4136 45.9375 77.8164C45.5598 78.2193 45.5805 78.8518 45.9834 79.2295L48.2051 81.3135C48.5897 81.6737 49.1887 81.6739 49.5732 81.3135L54.0176 77.1465C54.4202 76.769 54.4406 76.1363 54.0635 75.7334Z" fill="#05BE23"/>
+                          </svg>
+                        ) : (
+                          <svg width="18" height="18" viewBox="40.917 36.917 18.167 18.167" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M50 36.917C55.0163 36.9172 59.0838 40.9837 59.084 46C59.0838 51.0163 55.0163 55.0838 50 55.084C44.9837 55.0838 40.9172 51.0163 40.917 46C40.9172 40.9837 44.9837 36.9172 50 36.917ZM53.207 42.793C52.8165 42.4024 52.1835 42.4024 51.793 42.793L50 44.5859L48.207 42.793C47.8165 42.4024 47.1835 42.4024 46.793 42.793C46.4024 43.1835 46.4024 43.8165 46.793 44.207L48.5859 46L46.793 47.793C46.4024 48.1835 46.4024 48.8165 46.793 49.207C47.1835 49.5976 47.8165 49.5976 48.207 49.207L50 47.4141L51.793 49.207C52.1835 49.5976 52.8165 49.5976 53.207 49.207C53.5976 48.8165 53.5976 48.1835 53.207 47.793L51.4141 46L53.207 44.207C53.5976 43.8165 53.5976 43.1835 53.207 42.793Z" fill="#ADAFB3"/>
+                          </svg>
+                        )}
+                        <span className="info-panel__label">Материалы для обучения</span>
                       </div>
+                      <p className="info-panel__text">Как только вы закончите настройку бота, его можно будет запустить. Бот включится и начнёт принимать запросы в указанных каналах</p>
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              versions.length >= 1 && (
+              <div className="ver-btn" ref={versionRef}
+                onClick={() => versions.length >= 2 && setVersionOpen(v => !v)}
+                onMouseEnter={() => setVerHover(true)}
+                onMouseLeave={() => setVerHover(false)}>
+                <span className={`ver-dot${botEnabled ? ' ver-dot--on' : ''}`} />
+                <span>{ver?.label}</span>
+                <span className="ico-chev">▾</span>
+                {versionOpen && versions.length >= 2 && (
+                  <div className="ver-drop" onClick={e => e.stopPropagation()}>
+                    <div className="ver-drop__header">версии бота</div>
+                    {[...versions].reverse().map(v => (
+                      <div key={v.id}
+                        className={`ver-drop__row${v.id === currentVersion ? ' ver-drop__row--active' : ''}`}
+                        onClick={() => { setCurrentVersion(v.id); setVersionOpen(false); }}>
+                        <div className="ver-drop__name">
+                          <span className={`ver-dot${getS(v.id).enabled ? ' ver-dot--on' : ''}`} />
+                          {v.label}
+                        </div>
+                        <div className="ver-drop__meta">
+                          <span className="ver-drop__status">{v.status}</span>
+                          <span>{v.date}, {v.time}</span>
+                          <span>{v.author}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              )
             )}
           </div>
           <div className="pheader__right">
@@ -769,15 +850,8 @@ export default function App() {
                       )}
                     </div>
 
-                    {/* Launch button or toggle */}
-                    {!botLaunched ? (
-                      <button
-                        className={`btn${canLaunch ? ' btn--primary' : ' btn--disabled'}`}
-                        onClick={canLaunch ? launchBot : undefined}
-                        disabled={!canLaunch}>
-                        Запустить бота
-                      </button>
-                    ) : (
+                    {/* Toggle — только после первого запуска */}
+                    {botLaunched && (
                       <div className="s-launch-group">
                         <button
                           className={`btn${botEnabled ? ' btn--danger' : ' btn--primary'}`}
@@ -925,10 +999,10 @@ export default function App() {
                   {/* Save button */}
                   <div className="settings-actions">
                     <button
-                      className={`btn${canSave ? ' btn--primary' : ' btn--save-disabled'}`}
-                      onClick={canSave ? saveSettings : undefined}
-                      disabled={!canSave}>
-                      Сохранить
+                      className={`btn${saveState === 'saving' ? ' btn--accent btn--saving' : saveState === 'saved' ? ' btn--save-disabled' : canSave ? ' btn--accent' : ' btn--save-disabled'}`}
+                      onClick={canSave && !saveState ? saveSettings : undefined}
+                      disabled={!canSave || saveState === 'saved'}>
+                      {saveState === 'saving' ? <span className="btn-spinner" /> : saveState === 'saved' ? <><Check size={16} strokeWidth={2.5} />Сохранено</> : 'Сохранить'}
                     </button>
                   </div>
                 </div>
