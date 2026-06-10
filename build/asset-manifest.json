@@ -1,17 +1,17 @@
 {
   "files": {
     "main.css": "./static/css/main.94589486.css",
-    "main.js": "./static/js/main.5c2e1b19.js",
+    "main.js": "./static/js/main.51a6135c.js",
     "static/js/453.4a21ce97.chunk.js": "./static/js/453.4a21ce97.chunk.js",
     "static/media/chat-illustration.png": "./static/media/chat-illustration.4aab7f52c79f4ae971b7.png",
     "static/media/usedesk_logo.svg": "./static/media/usedesk_logo.9df6eba0d65fb12b2b9d7ebd9c17ce2b.svg",
     "index.html": "./index.html",
     "main.94589486.css.map": "./static/css/main.94589486.css.map",
-    "main.5c2e1b19.js.map": "./static/js/main.5c2e1b19.js.map",
+    "main.51a6135c.js.map": "./static/js/main.51a6135c.js.map",
     "453.4a21ce97.chunk.js.map": "./static/js/453.4a21ce97.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.94589486.css",
-    "static/js/main.5c2e1b19.js"
+    "static/js/main.51a6135c.js"
   ]
 }
