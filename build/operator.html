@@ -726,7 +726,7 @@ body {
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><polyline points="16 18 22 12 16 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="8 6 2 12 8 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
 
-      <div class="sb-item" title="ИИ">
+      <div class="sb-item" title="ИИ" onclick="window.location.href='./'">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.937A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
 
@@ -812,9 +812,6 @@ body {
 
     <!-- Правая зона -->
     <div class="hdr-right">
-
-      <!-- Назад к боту (появляется только при переходе из чатбота) -->
-      <a href="#" id="botBackBtn" class="hdr-bot-back">← ИИ бот</a>
 
       <!-- Создать -->
       <button class="hdr-pill">
@@ -1398,8 +1395,6 @@ function applyBotConfig() {
   const enabled     = p.get('enabled') === '1';
   const channelIds  = (p.get('channels')  || '').split(',').filter(Boolean);
   const assigneeIds = (p.get('assignees') || '').split(',').filter(Boolean);
-  const fromUrl     = p.get('from');
-
   // Имя бота
   AGENTS[0].name = botName;
   MESSAGES.forEach(b => b.msgs.forEach(m => { if (m.side === 'bot') m.name = botName; }));
@@ -1428,12 +1423,6 @@ function applyBotConfig() {
     });
   }
 
-  // Кнопка «← ИИ бот»
-  if (fromUrl) {
-    const btn = document.getElementById('botBackBtn');
-    btn.href  = fromUrl;
-    btn.style.display = 'inline-flex';
-  }
 
   updateAssigneeBtn();
 }
