@@ -1293,6 +1293,9 @@ const AGENTS = [
   { id:'a3',  name:'Сидоров Алексей',  initials:'СА', color:'#059669' },
   { id:'a4',  name:'Козлова Анна',     initials:'КА', color:'#D97706' },
   { id:'a5',  name:'Новиков Дмитрий',  initials:'НД', color:'#7C3AED' },
+  { id:'e1',  name:'Захаров Олег',     initials:'ЗО', color:'#0891B2' },
+  { id:'e2',  name:'Белова Татьяна',   initials:'БТ', color:'#BE185D' },
+  { id:'e3',  name:'Морозов Андрей',   initials:'МА', color:'#15803D' },
 ];
 let selectedAgent = AGENTS[0];
 
@@ -1338,8 +1341,10 @@ document.addEventListener('click', () => {
 document.getElementById('aiToggle').addEventListener('change', e => {
   if (e.target.checked) {
     selectedAgent = AGENTS[0];
-    updateAssigneeBtn();
+  } else {
+    selectedAgent = AGENTS.length > 1 ? AGENTS[1] : AGENTS[0];
   }
+  updateAssigneeBtn();
 });
 
 // ── SEND MESSAGE ──────────────────────────────────────────────────
@@ -1412,7 +1417,7 @@ function applyBotConfig() {
     }
   }
 
-  // Агенты из настроек чатбота
+  // Агенты из настроек чатбота + фиксированные доп. агенты команды
   if (assigneeIds.length > 0) {
     AGENTS.splice(1);
     assigneeIds.forEach((id, i) => {
@@ -1421,6 +1426,16 @@ function applyBotConfig() {
       const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
       AGENTS.push({ id: 'a' + (i + 1), name, initials, color: ASGN_COLORS[i % ASGN_COLORS.length] });
     });
+    AGENTS.push(
+      { id:'e1', name:'Захаров Олег',   initials:'ЗО', color:'#0891B2' },
+      { id:'e2', name:'Белова Татьяна', initials:'БТ', color:'#BE185D' },
+      { id:'e3', name:'Морозов Андрей', initials:'МА', color:'#15803D' },
+    );
+  }
+
+  // При выключении тумблера — переназначаем на первого агента из настроек
+  if (!enabled && AGENTS.length > 1) {
+    selectedAgent = AGENTS[1];
   }
 
 
