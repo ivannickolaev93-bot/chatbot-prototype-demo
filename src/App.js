@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import './App.css';
 import usedeskLogo from './usedesk_logo.svg';
 import chatIllustration from './chat-illustration.png';
@@ -187,6 +188,13 @@ const BOT_REPLIES = [
 
 function fmtN(n) { return n.toLocaleString('ru-RU'); }
 
+function pluralArticles(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'статья';
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return 'статьи';
+  return 'статей';
+}
+
 function CB({ checked, indeterminate, onClick }) {
   return (
     <span
@@ -217,10 +225,19 @@ function checkState(ids, selected) {
 
 // ─── App ─────────────────────────────────────────────────────────────────────
 
+const _INIT = (() => {
+  try { return JSON.parse(localStorage.getItem('ud_chatbot') || 'null') || {}; }
+  catch { return {}; }
+})();
+
 export default function App() {
   const [activeTab,       setActiveTab]       = useState('training');
-  const [botStatus,       setBotStatus]       = useState('untrained');
-  const [selected,        setSelected]        = useState(new Set());
+  const [botStatus,       setBotStatus]       = useState(() => {
+    const s = _INIT.botStatus || 'untrained';
+    if (s === 'training') return (_INIT.versions || []).length > 0 ? 'trained' : 'untrained';
+    return s;
+  });
+  const [selected,        setSelected]        = useState(() => new Set(_INIT.selected || []));
   const [expandedKbs,     setExpandedKbs]     = useState(new Set()); // всё свёрнуто на старте — раскрывается по клику
   const [expandedSecs,    setExpandedSecs]    = useState(new Set());
   const [expandedCats,    setExpandedCats]    = useState(new Set());
@@ -234,27 +251,33 @@ export default function App() {
   const [testingLoading,  setTestingLoading]  = useState(false);
   const [trainedSnapshot, setTrainedSnapshot] = useState(null); // Set of article ids at training time
   const [updatedIds,      setUpdatedIds]      = useState(() => new Set(INITIAL_UPDATED_IDS)); // статьи с непримененными обновлениями
-  const [selectiveOpen,   setSelectiveOpen]   = useState(false); // шторка «Обновить выборочно»
-  const [selectiveChecked,setSelectiveChecked]= useState(new Set()); // отмеченные в шторке статьи
-  const [selectivePublicOnly, setSelectivePublicOnly] = useState(false); // тумблер в шторке
   const [updateHover,     setUpdateHover]     = useState(false);
+  const [toggleBtnHover,    setToggleBtnHover]    = useState(false); // тултип на кнопке «Включить»/«Выключить» в настройках
+  const [toggleBtnTooltipPos, setToggleBtnTooltipPos] = useState(null); // {top, left} — координаты для tooltip-портала (уходит от обрезания overflow-контейнером)
+  const toggleBtnWrapRef = useRef(null);
+  const [historyBtnHover,  setHistoryBtnHover]  = useState(false); // тултип «Показать историю» на иконке-кнопке истории
+  const [historyBtnTooltipPos, setHistoryBtnTooltipPos] = useState(null);
+  const historyBtnRef = useRef(null);
   const [updBannerClosed, setUpdBannerClosed] = useState(false); // плашка обновлений закрыта крестиком
+  const [hoveredCb, setHoveredCb] = useState(null); // id раздела/категории/статьи, чей чекбокс сейчас под курсором
+  const [showVersionConfirm, setShowVersionConfirm] = useState(false); // модалка подтверждения новой версии (кнопка «Обновить материалы» внизу)
+  const [confirmGroupOpen, setConfirmGroupOpen] = useState({ added: false, removed: false });
   const messagesEndRef = useRef(null);
 
   // Settings state — свои настройки у каждой версии
-  const [settingsByVersion, setSettingsByVersion] = useState({}); // { [versionId]: BLANK_SETTINGS }
+  const [settingsByVersion, setSettingsByVersion] = useState(_INIT.settingsByVersion || {}); // { [versionId]: BLANK_SETTINGS }
   const [showChannelsDrop,setShowChannelsDrop]= useState(false);
   const [showAssignDrop,  setShowAssignDrop]  = useState(false);
   const [saveState,       setSaveState]       = useState(null); // null | 'saving' | 'saved'
   const [toast,           setToast]           = useState(null); // { text, type }
   const [confirmEnable,   setConfirmEnable]   = useState(null); // { otherLabel, launching } — модалка конфликта версий
   const [historyOpen,     setHistoryOpen]     = useState(false); // шторка «История работы»
-  const [botEverLaunched, setBotEverLaunched] = useState(false); // бот хоть раз запускался
+  const [botEverLaunched, setBotEverLaunched] = useState(_INIT.botEverLaunched || false); // бот хоть раз запускался
   const [infoOpen,        setInfoOpen]        = useState(false); // панель статусов запуска
-  const [enableLog,       setEnableLog]       = useState([]); // { id, versionLabel, action: 'on'|'off', author, date, time }
+  const [enableLog,       setEnableLog]       = useState(_INIT.enableLog || []); // { id, versionLabel, action: 'on'|'off', author, date, time }
 
   // Особые инструкции — общие для всех версий
-  const [instructions,    setInstructions]    = useState(INIT_INSTRUCTIONS);
+  const [instructions,    setInstructions]    = useState(_INIT.instructions || INIT_INSTRUCTIONS);
   const [instrEnabledOnly,setInstrEnabledOnly]= useState(false);
   const [instrSearch,     setInstrSearch]     = useState('');
   const [expandedInstr,   setExpandedInstr]   = useState(new Set());
@@ -265,10 +288,12 @@ export default function App() {
   const assignRef   = useRef(null);
   const versionRef  = useRef(null);
   const infoRef     = useRef(null);
+  const verInfoRef  = useRef(null);
   const [versionOpen,     setVersionOpen]     = useState(false);
+  const [verInfoOpen,     setVerInfoOpen]     = useState(false); // попап-легенда статусов версий (иконка рядом с бейджем версии)
   const [verHover,        setVerHover]        = useState(false);
-  const [versions,        setVersions]        = useState([]); // { id, label, status, date, time, author } — реальное время создания
-  const [currentVersion,  setCurrentVersion]  = useState(null); // просматриваемая версия
+  const [versions,        setVersions]        = useState(_INIT.versions || []); // { id, label, status, date, time, author } — реальное время создания
+  const [currentVersion,  setCurrentVersion]  = useState(_INIT.currentVersion || null); // просматриваемая версия
   const fileInputRef = useRef(null);
 
   // Настройки текущей версии + хелперы
@@ -299,10 +324,6 @@ export default function App() {
   // trainedSnapshot — набор статей на момент обучения; updated — у статьи есть обновление.
   const articleHasUpdate = (a) => everTrained && updatedIds.has(a.id) && trainedSnapshot !== null && trainedSnapshot.has(a.id);
   const hasUpdates = allArticles.some(articleHasUpdate);
-  // обновлённые статьи, сгруппированные по БЗ — для шторки «Обновить выборочно» (без вложенности разделов/категорий)
-  const updatedByKb = KNOWLEDGE_BASES
-    .map(kb => ({ kb, articles: kb.sections.flatMap(s => s.categories.flatMap(c => c.articles)).filter(articleHasUpdate) }))
-    .filter(g => g.articles.length > 0);
   const hasFiles   = files.some(f => f.status === 'uploaded');
 
   // total selected article chars across all KBs
@@ -377,8 +398,8 @@ export default function App() {
     }, 3500);
   }
 
-  // «Обновить все»: применяем обновления ТОЛЬКО обученных материалов и дообучаем бота (новая версия).
-  // Обновления в других базах, которые не обучали, остаются нетронутыми.
+  // «Обновить материалы» из плашки: применяем обновления ТОЛЬКО обученных материалов и дообучаем бота (новая версия).
+  // Обновления в других базах, которые не обучали, остаются нетронутыми. Без модалки подтверждения.
   function updateAll() {
     setUpdatedIds(prev => {
       const n = new Set(prev);
@@ -388,25 +409,26 @@ export default function App() {
     startTraining();               // дообучение + новая версия бота
   }
 
-  // «Обновить выборочно»: открываем шторку, по умолчанию отмечены все обновлённые обученные статьи
-  function openSelective() {
-    setSelectiveChecked(new Set(allArticles.filter(articleHasUpdate).map(a => a.id)));
-    setSelectivePublicOnly(false);
-    setSelectiveOpen(true);
+  // Открывает модалку подтверждения перед созданием новой версии (только кнопка «Обновить материалы» внизу).
+  function openVersionConfirm() {
+    setConfirmGroupOpen({ added: false, removed: false });
+    setShowVersionConfirm(true);
   }
-  function toggleSelective(id) {
-    setSelectiveChecked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  function cancelVersionConfirm() {
+    setShowVersionConfirm(false);
   }
-  // Применяем обновления только отмеченных статей + дообучение (новая версия). Снятые сохраняют точки.
-  function updateSelected() {
-    setUpdatedIds(prev => { const n = new Set(prev); selectiveChecked.forEach(id => n.delete(id)); return n; });
-    setSelectiveOpen(false);
-    startTraining();
+  function confirmVersionCreate() {
+    setShowVersionConfirm(false);
+    startTraining();               // дообучение + новая версия бота
   }
 
-  // есть новые материалы по сравнению со снимком на момент обучения
+  // статьи, добавленные/убранные из выбора относительно снимка на момент обучения — для модалки подтверждения
+  const addedArticles   = trainedSnapshot ? allArticles.filter(a => selected.has(a.id) && !trainedSnapshot.has(a.id)) : [];
+  const removedArticles = trainedSnapshot ? allArticles.filter(a => trainedSnapshot.has(a.id) && !selected.has(a.id)) : [];
+
+  // состав выбранных материалов изменился по сравнению со снимком на момент обучения (добавили и/или убрали статьи, либо загрузили файл)
   const hasNewMaterials = isTrained && trainedSnapshot !== null &&
-    ([...selected].some(id => !trainedSnapshot.has(id)) ||
+    (addedArticles.length > 0 || removedArticles.length > 0 ||
      files.some(f => f.status === 'uploaded'));
 
   function handleFileInput(e) {
@@ -507,6 +529,23 @@ export default function App() {
   const canSave   = settingsDirty && botName.trim() !== '' && channels.length > 0 && assignees.length > 0;
   const canLaunch = settingsSaved && versions.length > 0;
 
+  function openOperator() {
+    try {
+      localStorage.setItem('ud_chatbot', JSON.stringify({
+        versions, currentVersion, settingsByVersion,
+        botEverLaunched, botStatus, instructions, enableLog,
+        selected: [...selected],
+      }));
+    } catch {}
+    const params = new URLSearchParams({
+      botName:   s.botName || 'ИИ бот',
+      enabled:   s.enabled ? '1' : '0',
+      channels:  s.channels.join(','),
+      assignees: s.assignees.join(','),
+    });
+    window.location.href = 'operator.html?' + params.toString();
+  }
+
   function handleAvatarChange(e) {
     const file = e.target.files[0];
     if (file) updateS({ avatarUrl: URL.createObjectURL(file) });
@@ -555,6 +594,16 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messagesByVersion, currentVersion, botTyping]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('ud_chatbot', JSON.stringify({
+        versions, currentVersion, settingsByVersion,
+        botEverLaunched, botStatus, instructions, enableLog,
+        selected: [...selected],
+      }));
+    } catch {}
+  }, [versions, currentVersion, settingsByVersion, botEverLaunched, botStatus, instructions, enableLog, selected]);
+
   // Закрытие дропдаунов по клику вне области
   useEffect(() => {
     function handleClickOutside(e) {
@@ -562,6 +611,7 @@ export default function App() {
       if (assignRef.current   && !assignRef.current.contains(e.target))   setShowAssignDrop(false);
       if (versionRef.current  && !versionRef.current.contains(e.target))  setVersionOpen(false);
       if (infoRef.current     && !infoRef.current.contains(e.target))     setInfoOpen(false);
+      if (verInfoRef.current  && !verInfoRef.current.contains(e.target))  setVerInfoOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -597,7 +647,8 @@ export default function App() {
         </div>
         <div className="sb-nav">
           {SIDEBAR_ICONS.map(({ id, Icon, label, active, dot, badge }) => (
-            <button key={id} className={`sb-btn${active ? ' sb-btn--active' : ''}`} title={label}>
+            <button key={id} className={`sb-btn${active ? ' sb-btn--active' : ''}`} title={label}
+              onClick={id === 'chat' ? openOperator : undefined}>
               <Icon size={24} strokeWidth={1.5} color="#ffffff" />
               {dot && <span className="sb-dot" />}
               {badge && <span className="sb-badge">{badge}</span>}
@@ -611,6 +662,11 @@ export default function App() {
         <header className="pheader">
           <div className="pheader__left">
             <span className="pheader__title">ИИ Чат-бот</span>
+            {botEverLaunched && versions.length >= 1 && (
+              <span className={`bot-chip${botEnabled ? ' bot-chip--on' : ' bot-chip--off'}`}>
+                {botEnabled ? 'Включен' : 'Выключен'}
+              </span>
+            )}
             {!botEverLaunched ? (
               <div className="launch-header-group">
                 <button
@@ -663,33 +719,65 @@ export default function App() {
               </div>
             ) : (
               versions.length >= 1 && (
-              <div className="ver-btn" ref={versionRef}
-                onClick={() => versions.length >= 2 && setVersionOpen(v => !v)}
-                onMouseEnter={() => setVerHover(true)}
-                onMouseLeave={() => setVerHover(false)}>
-                <span className={`ver-dot${botEnabled ? ' ver-dot--on' : ''}`} />
-                <span>{ver?.label}</span>
-                <span className="ico-chev">▾</span>
-                {versionOpen && versions.length >= 2 && (
-                  <div className="ver-drop" onClick={e => e.stopPropagation()}>
-                    <div className="ver-drop__header">версии бота</div>
-                    {[...versions].reverse().map(v => (
-                      <div key={v.id}
-                        className={`ver-drop__row${v.id === currentVersion ? ' ver-drop__row--active' : ''}`}
-                        onClick={() => { setCurrentVersion(v.id); setVersionOpen(false); }}>
-                        <div className="ver-drop__name">
-                          <span className={`ver-dot${getS(v.id).enabled ? ' ver-dot--on' : ''}`} />
-                          {v.label}
+              <div className="launch-header-group">
+                <div className="ver-btn" ref={versionRef}
+                  onClick={() => versions.length >= 2 && setVersionOpen(v => !v)}
+                  onMouseEnter={() => setVerHover(true)}
+                  onMouseLeave={() => setVerHover(false)}>
+                  <span className={`ver-dot${botEnabled ? ' ver-dot--on' : ''}`} />
+                  <span>{ver?.label}</span>
+                  <span className="ico-chev">▾</span>
+                  {versionOpen && versions.length >= 2 && (
+                    <div className="ver-drop" onClick={e => e.stopPropagation()}>
+                      <div className="ver-drop__header">версии бота</div>
+                      {[...versions].reverse().map(v => (
+                        <div key={v.id}
+                          className={`ver-drop__row${v.id === currentVersion ? ' ver-drop__row--active' : ''}`}
+                          onClick={() => { setCurrentVersion(v.id); setVersionOpen(false); }}>
+                          <div className="ver-drop__name">
+                            <span className={`ver-dot${getS(v.id).enabled ? ' ver-dot--on' : ''}`} />
+                            {v.label}
+                          </div>
+                          <div className="ver-drop__meta">
+                            <span className="ver-drop__status">{v.status}</span>
+                            <span>{v.date}, {v.time}</span>
+                            <span>{v.author}</span>
+                          </div>
                         </div>
-                        <div className="ver-drop__meta">
-                          <span className="ver-drop__status">{v.status}</span>
-                          <span>{v.date}, {v.time}</span>
-                          <span>{v.author}</span>
-                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="info-icon-wrap" ref={verInfoRef}
+                  onClick={e => { e.stopPropagation(); setVerInfoOpen(o => !o); }}>
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{cursor:'pointer'}}>
+                    <path d="M0 6C0 2.68629 2.68629 0 6 0H26C29.3137 0 32 2.68629 32 6V26C32 29.3137 29.3137 32 26 32H6C2.68629 32 0 29.3137 0 26V6Z" fill="#E0E1E3"/>
+                    <path d="M16.0002 18.6666V15.9999M16.0002 13.3333H16.0068M22.6668 15.9999C22.6668 19.6818 19.6821 22.6666 16.0002 22.6666C12.3183 22.6666 9.3335 19.6818 9.3335 15.9999C9.3335 12.318 12.3183 9.33325 16.0002 9.33325C19.6821 9.33325 22.6668 12.318 22.6668 15.9999Z" stroke="#313640" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  {verInfoOpen && (
+                    <div className="ver-info-panel" onClick={e => e.stopPropagation()}>
+                      <button className="info-panel__close" onClick={() => setVerInfoOpen(false)}>
+                        <X size={20} strokeWidth={2} color="#676768" />
+                      </button>
+                      <div className="ver-info-panel__row">
+                        <span className="ver-dot ver-dot--on" />
+                        <span className="ver-info-panel__dash">—</span>
+                        <span className="ver-info-panel__label">Версия работает</span>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <div className="ver-info-panel__row">
+                        <span className="ver-dot" />
+                        <span className="ver-info-panel__dash">—</span>
+                        <span className="ver-info-panel__label">Версия выключена</span>
+                      </div>
+                      <p className="ver-info-panel__text">
+                        При обновлении материалов для обучения или сохранении изменений в настройках всегда создаётся <b>новая версия</b> бота.
+                      </p>
+                      <p className="ver-info-panel__text">
+                        По умолчанию работающая версия <b>не меняется</b>, вам нужно самостоятельно включить актуальную версию в настройках
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
               )
             )}
@@ -853,14 +941,48 @@ export default function App() {
                     {/* Toggle — только после первого запуска */}
                     {botLaunched && (
                       <div className="s-launch-group">
-                        <button
-                          className={`btn${botEnabled ? ' btn--danger' : ' btn--primary'}`}
-                          onClick={toggleBot}>
-                          {botEnabled ? 'Выключить' : 'Включить'}
-                        </button>
-                        <button className="s-icon-btn" title="История включений" onClick={() => setHistoryOpen(true)}>
+                        <div className="disable-btn-wrap" ref={toggleBtnWrapRef}
+                          onMouseEnter={() => {
+                            const r = toggleBtnWrapRef.current?.getBoundingClientRect();
+                            if (r) setToggleBtnTooltipPos({ top: r.top, left: r.left });
+                            setToggleBtnHover(true);
+                          }}
+                          onMouseLeave={() => setToggleBtnHover(false)}>
+                          <button
+                            className={`btn${botEnabled ? ' btn--danger' : ' btn--primary'}`}
+                            onClick={toggleBot}>
+                            {botEnabled ? 'Выключить' : 'Включить'}
+                          </button>
+                          {toggleBtnHover && toggleBtnTooltipPos && createPortal(
+                            <div className="fixed-tooltip"
+                              style={{ top: toggleBtnTooltipPos.top - 8, left: toggleBtnTooltipPos.left }}>
+                              <div className="hint-tooltip__body">
+                                {botEnabled
+                                  ? 'Бот прекратит работу и распределит запросы между агентами'
+                                  : 'После включения эта версия бота начнёт принимать запросы клиентов'}
+                              </div>
+                              <div className="hint-tooltip__arrow" />
+                            </div>,
+                            document.body
+                          )}
+                        </div>
+                        <button className="s-icon-btn" ref={historyBtnRef} onClick={() => setHistoryOpen(true)}
+                          onMouseEnter={() => {
+                            const r = historyBtnRef.current?.getBoundingClientRect();
+                            if (r) setHistoryBtnTooltipPos({ top: r.top, left: r.left });
+                            setHistoryBtnHover(true);
+                          }}
+                          onMouseLeave={() => setHistoryBtnHover(false)}>
                           <History size={20} color="#464b54" strokeWidth={2} />
                         </button>
+                        {historyBtnHover && historyBtnTooltipPos && createPortal(
+                          <div className="fixed-tooltip fixed-tooltip--narrow"
+                            style={{ top: historyBtnTooltipPos.top - 8, left: historyBtnTooltipPos.left }}>
+                            <div className="hint-tooltip__body">Показать историю</div>
+                            <div className="hint-tooltip__arrow" />
+                          </div>,
+                          document.body
+                        )}
                       </div>
                     )}
                   </div>
@@ -1118,8 +1240,8 @@ export default function App() {
                           Хотите применить их сразу? При этом будет создана новая версия бота
                         </span>
                         <div className="upd-banner__actions">
-                          <button className="btn btn--primary btn--sm" onClick={updateAll}>Обновить все</button>
-                          <button className="btn btn--outline btn--sm" onClick={openSelective}>Обновить выборочно</button>
+                          <button className="btn btn--primary btn--sm" onClick={updateAll}>Обновить материалы</button>
+                          <button className="btn btn--outline btn--sm" onClick={() => setUpdBannerClosed(true)}>Закрыть</button>
                         </div>
                       </div>
                     </div>
@@ -1218,10 +1340,20 @@ export default function App() {
                                         n.has(section.id) ? n.delete(section.id) : n.add(section.id);
                                         return n;
                                       })}>
-                                      <CB
-                                        checked={secState === 'all'} indeterminate={secState === 'some'}
-                                        onClick={e => toggleGroup(secIds, e)}
-                                      />
+                                      <span className="cb-wrap"
+                                        onMouseEnter={() => setHoveredCb(section.id)}
+                                        onMouseLeave={() => setHoveredCb(null)}>
+                                        <CB
+                                          checked={secState === 'all'} indeterminate={secState === 'some'}
+                                          onClick={e => toggleGroup(secIds, e)}
+                                        />
+                                        {hoveredCb === section.id && (
+                                          <div className="cb-tooltip">
+                                            <div className="cb-tooltip__body">{secState === 'all' ? 'Убрать из обучения' : 'Добавить к обучению'}</div>
+                                            <div className="cb-tooltip__arrow" />
+                                          </div>
+                                        )}
+                                      </span>
                                       {secHasUpdates && <span className="upd-dot" title="Есть обновления" />}
                                       <div className="tree-section__label">
                                         <span className="tree-section__tag">Раздел</span>
@@ -1253,10 +1385,20 @@ export default function App() {
                                                   n.has(cat.id) ? n.delete(cat.id) : n.add(cat.id);
                                                   return n;
                                                 })}>
-                                                <CB
-                                                  checked={catState === 'all'} indeterminate={catState === 'some'}
-                                                  onClick={e => toggleGroup(catIds, e)}
-                                                />
+                                                <span className="cb-wrap"
+                                                  onMouseEnter={() => setHoveredCb(cat.id)}
+                                                  onMouseLeave={() => setHoveredCb(null)}>
+                                                  <CB
+                                                    checked={catState === 'all'} indeterminate={catState === 'some'}
+                                                    onClick={e => toggleGroup(catIds, e)}
+                                                  />
+                                                  {hoveredCb === cat.id && (
+                                                    <div className="cb-tooltip">
+                                                      <div className="cb-tooltip__body">{catState === 'all' ? 'Убрать из обучения' : 'Добавить к обучению'}</div>
+                                                      <div className="cb-tooltip__arrow" />
+                                                    </div>
+                                                  )}
+                                                </span>
                                                 {catHasUpdates && <span className="upd-dot" title="Есть обновления" />}
                                                 <span className="tree-cat__name">{cat.name}</span>
                                                 <span className="tree-chars">{fmtN(catChars > 0 ? catChars : totalCatChars)}</span>
@@ -1270,10 +1412,20 @@ export default function App() {
                                                   <div key={article.id}
                                                     className={`tree-article${selected.has(article.id) ? ' tree-article--checked' : ''}`}
                                                     onClick={() => toggle(article.id)}>
-                                                    <CB
-                                                      checked={selected.has(article.id)}
-                                                      onClick={e => { e.stopPropagation(); toggle(article.id); }}
-                                                    />
+                                                    <span className="cb-wrap"
+                                                      onMouseEnter={() => setHoveredCb(article.id)}
+                                                      onMouseLeave={() => setHoveredCb(null)}>
+                                                      <CB
+                                                        checked={selected.has(article.id)}
+                                                        onClick={e => { e.stopPropagation(); toggle(article.id); }}
+                                                      />
+                                                      {hoveredCb === article.id && (
+                                                        <div className="cb-tooltip">
+                                                          <div className="cb-tooltip__body">{selected.has(article.id) ? 'Убрать из обучения' : 'Добавить к обучению'}</div>
+                                                          <div className="cb-tooltip__arrow" />
+                                                        </div>
+                                                      )}
+                                                    </span>
                                                     {articleHasUpdate(article) && (
                                                       <span className="upd-dot" title="В статье есть обновления" />
                                                     )}
@@ -1369,7 +1521,7 @@ export default function App() {
                         onMouseLeave={() => setUpdateHover(false)}>
                         <button
                           className={`btn btn--lg${hasNewMaterials ? ' btn--update' : ' btn--disabled'}`}
-                          onClick={hasNewMaterials ? startTraining : undefined}
+                          onClick={hasNewMaterials ? openVersionConfirm : undefined}
                           disabled={!hasNewMaterials}>
                           Обновить материалы
                         </button>
@@ -1424,55 +1576,6 @@ export default function App() {
                 Сохранить
               </button>
               <button className="btn btn--outline" onClick={() => setDrawer(null)}>Отмена</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Шторка «Материалы с обновлениями» — «Обновить выборочно» */}
-      {selectiveOpen && (
-        <div className="drawer-overlay" onClick={() => setSelectiveOpen(false)}>
-          <div className="drawer" onClick={e => e.stopPropagation()}>
-            <div className="upd-drawer__head">
-              <div className="upd-drawer__head-top">
-                <span className="drawer__title">Материалы с обновлениями</span>
-                <button className="drawer__close" onClick={() => setSelectiveOpen(false)}>
-                  <X size={24} color="#505051" strokeWidth={2} />
-                </button>
-              </div>
-              <label className="toggle-row" onClick={() => setSelectivePublicOnly(p => !p)}>
-                <span className={`sw${selectivePublicOnly ? ' sw--on' : ''}`}><span className="sw__knob" /></span>
-                <span className="toggle-label">Показывать только публичные</span>
-              </label>
-            </div>
-            <div className="drawer__content upd-drawer__content">
-              {updatedByKb.map(({ kb, articles }) => {
-                const shown = articles.filter(a => !selectivePublicOnly || !a.locked);
-                if (!shown.length) return null;
-                return (
-                  <div key={kb.id} className="upd-drawer__group">
-                    <div className="upd-drawer__kb">{kb.name}</div>
-                    <div className="upd-drawer__list">
-                      {shown.map(a => (
-                        <div key={a.id} className="upd-drawer__row" onClick={() => toggleSelective(a.id)}>
-                          <CB checked={selectiveChecked.has(a.id)}
-                            onClick={e => { e.stopPropagation(); toggleSelective(a.id); }} />
-                          <span className="upd-drawer__title">{a.title}</span>
-                          {a.locked && <Lock size={16} color="#676768" strokeWidth={1.5} />}
-                          <span className="upd-drawer__chars">{fmtN(a.chars)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="upd-drawer__actions">
-              <button className="btn btn--primary" onClick={updateSelected}
-                disabled={selectiveChecked.size === 0}>
-                Обновить выбранные
-              </button>
-              <button className="btn btn--outline" onClick={() => setSelectiveOpen(false)}>Закрыть</button>
             </div>
           </div>
         </div>
@@ -1565,6 +1668,62 @@ export default function App() {
         </div>
       )}
 
+      {/* Модалка подтверждения перед созданием новой версии */}
+      {showVersionConfirm && (
+        <div className="overlay" onClick={cancelVersionConfirm}>
+          <div className="upd-confirm" onClick={e => e.stopPropagation()}>
+            <div className="upd-confirm__content">
+              <div className="upd-confirm__hdr">
+                <h3 className="upd-confirm__title">Обновленные материалы</h3>
+                <button className="upd-confirm__close" onClick={cancelVersionConfirm}>
+                  <X size={24} strokeWidth={1.5} color="#676768" />
+                </button>
+              </div>
+              <div className="upd-confirm__groups">
+                {addedArticles.length > 0 && (
+                  <div className="upd-confirm__group">
+                    <div className="upd-confirm__group-hdr"
+                      onClick={() => setConfirmGroupOpen(p => ({ ...p, added: !p.added }))}>
+                      <div className="upd-confirm__group-left">
+                        <span className="upd-confirm__group-name">Добавлено</span>
+                        <span className="upd-confirm__group-count">{addedArticles.length} {pluralArticles(addedArticles.length)}</span>
+                      </div>
+                      <span className="ico-chev">{confirmGroupOpen.added ? '▲' : '▼'}</span>
+                    </div>
+                    {confirmGroupOpen.added && (
+                      <div className="upd-confirm__group-list">
+                        {addedArticles.map(a => <span key={a.id} className="upd-confirm__group-item">{a.title}</span>)}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {removedArticles.length > 0 && (
+                  <div className="upd-confirm__group">
+                    <div className="upd-confirm__group-hdr"
+                      onClick={() => setConfirmGroupOpen(p => ({ ...p, removed: !p.removed }))}>
+                      <div className="upd-confirm__group-left">
+                        <span className="upd-confirm__group-name">Удалено</span>
+                        <span className="upd-confirm__group-count">{removedArticles.length} {pluralArticles(removedArticles.length)}</span>
+                      </div>
+                      <span className="ico-chev">{confirmGroupOpen.removed ? '▲' : '▼'}</span>
+                    </div>
+                    {confirmGroupOpen.removed && (
+                      <div className="upd-confirm__group-list">
+                        {removedArticles.map(a => <span key={a.id} className="upd-confirm__group-item">{a.title}</span>)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="upd-confirm__actions">
+              <button className="btn btn--primary btn--block" onClick={confirmVersionCreate}>Создать новую версию</button>
+              <button className="btn btn--outline btn--block" onClick={cancelVersionConfirm}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast */}
       {toast && (
         <div className={`toast toast--${toast.type}`}>
@@ -1582,6 +1741,24 @@ export default function App() {
           <div className="toast__bar" />
         </div>
       )}
+
+      {/* Кнопка сброса прогресса */}
+      <button
+        onClick={() => { localStorage.removeItem('ud_chatbot'); window.location.reload(); }}
+        style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: '#fff', border: '1px solid #dcdcdc', borderRadius: 8,
+          padding: '8px 14px', cursor: 'pointer',
+          fontSize: 13, color: '#959696', fontFamily: 'inherit',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+        }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+        Сбросить прогресс
+      </button>
     </div>
   );
 }

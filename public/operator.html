@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Операторская — Usedesk</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  color: #222427;
+  background: #F4F5F5;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── LAYOUT ───────────────────────────────────────────────────── */
+.app { display: flex; flex-direction: row; height: 100vh; }
+.app-main { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-width: 0; }
+
+/* ── SIDEBAR ──────────────────────────────────────────────────── */
+.sidebar {
+  width: 56px; min-width: 56px;
+  background: #313640;
+  display: flex; flex-direction: column;
+  flex-shrink: 0; z-index: 20;
+}
+.sb-logo {
+  height: 72px; min-height: 72px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.sb-nav { flex: 1; display: flex; flex-direction: column; padding: 4px 0; overflow-y: auto; }
+.sb-nav::-webkit-scrollbar { display: none; }
+.sb-item {
+  width: 56px; height: 48px; min-height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: rgba(255,255,255,.55);
+  position: relative; flex-shrink: 0;
+  transition: color .15s, background .15s;
+}
+.sb-item:hover { color: #fff; background: rgba(255,255,255,.08); }
+.sb-item.active { color: #fff; background: #5A5E66; }
+.sb-badge {
+  position: absolute; top: 6px; left: 8px;
+  background: #FF5166; color: #fff;
+  border-radius: 9px; min-width: 18px; height: 18px;
+  font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+}
+.sb-item.sb-fullsvg { padding: 0; overflow: hidden; }
+
+/* ── HEADER ───────────────────────────────────────────────────── */
+.header {
+  height: 72px; min-height: 72px;
+  background: #fff;
+  border-bottom: 1px solid #DCDCDC;
+  display: flex; align-items: center;
+  padding: 0 20px 0 16px; gap: 0;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+/* Логотип */
+.hdr-logo {
+  font-size: 15px; font-weight: 700; color: #222427;
+  letter-spacing: .02em; flex-shrink: 0; margin-right: 8px;
+}
+
+/* Pill-дропдаун */
+.hdr-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #ECF2FE; color: #3060BF;
+  border: none; border-radius: 6px;
+  padding: 0 10px; height: 40px;
+  font-size: 13px; font-weight: 500; font-family: inherit;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.hdr-pill:hover { background: #DAEAFD; }
+
+/* Combo pill: основная часть + стрелка */
+.hdr-combo {
+  display: inline-flex; align-items: stretch;
+  border-radius: 6px; overflow: hidden; flex-shrink: 0;
+}
+.hdr-combo__main {
+  background: #3D79F2; color: #fff;
+  border: none; padding: 0 14px; height: 40px;
+  font-size: 13px; font-weight: 500; font-family: inherit;
+  cursor: pointer; display: flex; align-items: center;
+}
+.hdr-combo__main:hover { background: #2B6ADE; }
+.hdr-combo__arr {
+  background: #3D79F2; color: #fff;
+  border: none; border-left: 1px solid rgba(255,255,255,.25);
+  padding: 0 10px; cursor: pointer;
+  display: flex; align-items: center;
+}
+.hdr-combo__arr:hover { background: #2B6ADE; }
+
+/* Тумблер ИИ бот — единый компонент toggle+label */
+.hdr-toggle {
+  display:inline-flex; align-items:center; gap:8px;
+  cursor:pointer; flex-shrink:0;
+  padding:0 8px; height:36px; border-radius:6px;
+}
+.hdr-toggle:hover { background:#F0F0F0; }
+.hdr-toggle input { display:none; }
+.hdr-tgl-track {
+  width:24px; height:14px; border-radius:7px;
+  background:#3D79F2; position:relative; flex-shrink:0; transition:background .2s;
+}
+.hdr-tgl-track::after {
+  content:''; position:absolute;
+  width:10px; height:10px; background:#fff;
+  border-radius:50%; top:2px; right:2px;
+  transition:left .2s, right .2s; box-shadow:0 1px 2px rgba(0,0,0,.2);
+}
+.hdr-toggle input:not(:checked) ~ .hdr-tgl-track { background:#CCC; }
+.hdr-toggle input:not(:checked) ~ .hdr-tgl-track::after { right:auto; left:2px; }
+.hdr-tgl-label { font-size:13px; color:#505051; white-space:nowrap; }
+
+/* Группа центральных кнопок */
+.hdr-cc-group { display:flex; align-items:center; gap:2px; }
+.hdr-cc-right { flex:1; display:flex; align-items:center; justify-content:flex-end; padding-right:4px; }
+
+/* Кнопки в шапке — ghost */
+.hdr-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; border: none; color: #505051;
+  border-radius: 6px; padding: 0 8px; height: 36px;
+  font-size: 13px; font-family: inherit; cursor: pointer;
+  white-space: nowrap; flex-shrink: 0;
+}
+.hdr-btn:hover { background: #F0F0F0; }
+.hdr-btn.active { background: #ECF2FE; color: #3060BF; }
+
+/* Ссылка «назад к боту» */
+.hdr-bot-back {
+  display: none; align-items: center; gap: 5px;
+  color: #3060BF; font-size: 13px; text-decoration: none;
+  padding: 5px 10px; border-radius: 6px;
+  border: 1px solid #C7D8FB; background: #ECF2FE; white-space: nowrap;
+}
+.hdr-bot-back:hover { background: #DAEAFD; }
+
+/* Assignee dropdown */
+.asgn-wrap { position: relative; }
+.asgn-dd {
+  position: absolute; top: calc(100% + 4px); left: 0;
+  background: #fff; border: 1px solid #DCDCDC; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12); z-index: 200;
+  min-width: 200px; padding: 4px 0; overflow: hidden;
+}
+.asgn-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; font-size: 13px; color: #222427;
+  cursor: pointer; transition: background .1s;
+}
+.asgn-opt:hover { background: #F5F7FF; }
+.asgn-opt.sel { background: #ECF2FE; color: #3060BF; }
+.asgn-av {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 600; color: #fff;
+}
+
+/* Разделитель */
+.hdr-sep {
+  width: 1px; height: 20px; background: #DCDCDC;
+  flex-shrink: 0; margin: 0 4px;
+}
+
+/* Центральная зона — растягивается */
+.hdr-center { flex: 1; display: flex; align-items: center; justify-content: flex-start; gap: 2px; padding: 0 8px; }
+
+/* Правая зона — ширина = правому сайдбару, чтобы Завершить чат встал над его левым краем */
+.hdr-right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; width: 320px; }
+
+/* Аватар агента в шапке */
+.hdr-avatar {
+  width: 35px; height: 35px; border-radius: 50%;
+  border: 1px solid #DCDCDC; overflow: hidden; flex-shrink: 0;
+  background: #6B7280; display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+
+/* ── BUTTONS (legacy, used in panels) ─────────────────────────── */
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none;
+  color: #444; border-radius: 6px;
+  padding: 6px 10px; font-size: 13px; font-family: inherit;
+  cursor: pointer; transition: background .15s;
+}
+.btn-ghost:hover { background: #F0F0F0; }
+.btn-ghost.active { background: #EBF2FE; color: #3260EA; }
+
+/* ── TOGGLE (legacy, used in center panel) ────────────────────── */
+.toggle-wrap {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; padding: 6px 10px; border-radius: 6px;
+  user-select: none;
+}
+.toggle-wrap:hover { background: #F0F0F0; }
+.toggle-input { display: none; }
+.toggle-track {
+  width: 36px; height: 20px; background: #CCC;
+  border-radius: 10px; position: relative; flex-shrink: 0;
+  transition: background .2s;
+}
+.toggle-input:checked ~ .toggle-track { background: #3260EA; }
+.toggle-track::after {
+  content: ''; position: absolute;
+  width: 16px; height: 16px; background: #fff;
+  border-radius: 50%; top: 2px; left: 2px;
+  transition: left .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+.toggle-input:checked ~ .toggle-track::after { left: 18px; }
+.toggle-label { font-size: 14px; color: #222427; }
+
+/* ── BODY ─────────────────────────────────────────────────────── */
+.body {
+  display: flex; flex: 1; overflow: hidden;
+}
+
+/* ── AVATAR ───────────────────────────────────────────────────── */
+.avatar {
+  border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; color: #fff; font-weight: 500;
+  flex-shrink: 0; overflow: hidden;
+}
+.avatar-36 { width: 36px; height: 36px; font-size: 13px; }
+.avatar-40 { width: 40px; height: 40px; font-size: 14px; }
+.avatar-48 { width: 48px; height: 48px; font-size: 16px; }
+.avatar-28 { width: 28px; height: 28px; font-size: 11px; }
+.c-purple { background: #7C3AED; }
+.c-blue   { background: #2563EB; }
+.c-green  { background: #059669; }
+.c-orange { background: #D97706; }
+.c-pink   { background: #DB2777; }
+.c-teal   { background: #0D9488; }
+.c-gray   { background: #6B7280; }
+
+/* ── BADGE ────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 10px; min-width: 20px; height: 18px;
+  padding: 0 5px; font-size: 11px; font-weight: 500; flex-shrink: 0;
+}
+.badge-blue  { background: #3260EA; color: #fff; }
+.badge-gray  { background: #E5E7EB; color: #555; }
+.badge-spam  { background: #EF4444; color: #fff; font-size: 10px; padding: 2px 6px; height: auto; border-radius: 4px; }
+.badge-vip   { background: #0D9488; color: #fff; font-size: 10px; padding: 2px 6px; height: auto; border-radius: 4px; }
+
+.status-open  { background: #EFF6FF; color: #3260EA; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 500; display: inline-flex; align-items: center; }
+.status-hold  { background: #FEF3C7; color: #D97706; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 500; display: inline-flex; align-items: center; }
+
+/* ── CHANNEL ICON ─────────────────────────────────────────────── */
+.ch {
+  width: 16px; height: 16px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; flex-shrink: 0; line-height: 1;
+}
+.ch-wa    { background: #25D366; color: #fff; }
+.ch-tg    { background: #229ED9; color: #fff; }
+.ch-email { background: #6B7280; color: #fff; }
+.ch-vk    { background: #4C75A3; color: #fff; }
+
+/* ── ICON BUTTON ──────────────────────────────────────────────── */
+.icon-btn {
+  width: 32px; height: 32px; border: none; background: none;
+  cursor: pointer; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: #888; transition: background .15s;
+}
+.icon-btn:hover { background: #F0F0F0; color: #555; }
+
+/* ── LEFT PANEL ───────────────────────────────────────────────── */
+.panel-left {
+  width: 281px; min-width: 281px;
+  background: #fff; border-right: 1px solid #DCDCDC;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* "Мои ∨" топ-бар — 48px */
+.pl-topbar {
+  height: 48px; min-height: 48px;
+  display: flex; align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid #DCDCDC;
+  flex-shrink: 0;
+}
+.pl-view-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 14px; font-weight: 500; color: #222427;
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px; border-radius: 6px; font-family: inherit;
+}
+.pl-view-btn:hover { background: #F4F5F5; }
+
+/* Список */
+.pl-list { flex: 1; overflow-y: auto; }
+.pl-list::-webkit-scrollbar { width: 4px; }
+.pl-list::-webkit-scrollbar-thumb { background: #DDD; border-radius: 2px; }
+
+/* Шапка секции — 48px */
+.pl-section-hd {
+  height: 48px; min-height: 48px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 16px; cursor: pointer;
+  user-select: none; border-bottom: 1px solid #DCDCDC;
+  flex-shrink: 0;
+}
+.pl-section-hd:hover { background: #F8F8F8; }
+.pl-section-name { flex: 1; font-size: 13px; font-weight: 500; color: #38393A; }
+
+/* Бейдж секции: синий */
+.badge-section {
+  background: #D8E4FC; color: #3060BF;
+  border-radius: 9px; padding: 0 7px;
+  height: 18px; font-size: 11px; font-weight: 500;
+  display: inline-flex; align-items: center;
+}
+
+.pl-chevron { display: flex; align-items: center; color: #676768; }
+.pl-chevron.up { transform: rotate(180deg); }
+
+/* Элемент чата — 64px */
+.pl-chat {
+  height: 64px; min-height: 64px;
+  display: flex; align-items: center;
+  padding: 0 12px; gap: 0; cursor: pointer;
+  border-bottom: 1px solid #DCDCDC;
+  transition: background .1s;
+  position: relative;
+}
+.pl-chat:hover { background: #F8F8F8; }
+.pl-chat.active { background: #E4EDFC; }
+
+/* Блок аватара: 27px + онлайн-точка */
+.pl-avatar-wrap {
+  position: relative; flex-shrink: 0;
+  width: 27px; height: 27px;
+  margin-right: 12px;
+}
+.pl-avatar {
+  width: 27px; height: 27px; border-radius: 50%;
+  object-fit: cover; display: block;
+  border: 1px solid #DCDCDC;
+}
+.pl-online {
+  position: absolute; bottom: -1px; right: -2px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #05BE23; border: 2px solid #fff;
+}
+
+/* Тег (SPAM / VIP) над аватаром */
+.pl-tag-wrap {
+  position: absolute; top: -7px; left: -6px;
+  border-radius: 4px; padding: 1px 5px;
+  font-size: 9px; font-weight: 700; line-height: 14px;
+  white-space: nowrap; pointer-events: none;
+}
+.pl-tag-spam { background: #EF4444; color: #fff; }
+.pl-tag-vip  { background: #0D9488; color: #fff; }
+
+/* Контент справа от аватара */
+.pl-chat-body { flex: 1; min-width: 0; }
+
+/* Строка 1: иконка канала + имя + время */
+.pl-row1 {
+  display: flex; align-items: center; gap: 4px;
+  margin-bottom: 2px;
+}
+/* Строка 2: превью + бейдж */
+.pl-row2 { display: flex; align-items: center; gap: 4px; }
+
+.pl-ch-icon {
+  width: 16px; height: 16px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 700; flex-shrink: 0; line-height: 1;
+}
+.pl-ch-wa    { background: #48C857; color: #fff; }
+.pl-ch-tg    { background: #229ED9; color: #fff; }
+.pl-ch-email { background: #6B7280; color: #fff; }
+
+.pl-name {
+  flex: 1; font-size: 13px; font-weight: 500; color: #222427;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pl-time { font-size: 11px; color: #888; flex-shrink: 0; }
+.pl-time-red { font-size: 11px; color: #FF2640; flex-shrink: 0; font-weight: 500; }
+.pl-preview {
+  flex: 1; font-size: 12px; color: #888;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Бейдж непрочитанных: серый */
+.badge-unread {
+  background: #D6D7D9; color: #464B54;
+  border-radius: 8px; padding: 0 6px;
+  height: 18px; min-width: 18px; font-size: 11px; font-weight: 500;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ── MIDDLE PANEL ─────────────────────────────────────────────── */
+.panel-mid {
+  flex: 1; display: flex; flex-direction: column;
+  background: #F4F5F5; overflow: hidden;
+}
+.mid-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: #bbb; font-size: 15px;
+}
+.mid-chat { display: flex; flex-direction: column; height: 100%; }
+
+.mid-topbar {
+  background: #fff; border-bottom: 1px solid #DCDCDC;
+  padding: 0 16px; height: 56px; display: flex; align-items: center;
+  justify-content: flex-end; flex-shrink: 0;
+}
+.mid-client-info { flex: 1; min-width: 0; }
+.mid-client-name { font-weight: 500; font-size: 14px; }
+.mid-client-meta {
+  font-size: 12px; color: #888; margin-top: 2px;
+  display: flex; align-items: center; gap: 6px;
+}
+
+.mid-messages {
+  flex: 1; overflow-y: auto;
+  padding: 16px 24px; display: flex; flex-direction: column; gap: 0;
+}
+.mid-messages::-webkit-scrollbar { width: 4px; }
+.mid-messages::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+
+.msg-date-sep {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 12px; color: #aaa; margin: 12px 0 16px;
+}
+.msg-date-sep::before, .msg-date-sep::after {
+  content: ''; flex: 1; height: 1px; background: #E0E0E0;
+}
+
+/* ── MESSAGE GROUP ──────────────────────────────────────────────── */
+.msg-group { margin-bottom: 16px; }
+
+/* Строка с именем и временем */
+.mg-header {
+  display: flex; align-items: center; gap: 6px;
+  padding-left: 43px; margin-bottom: 5px;
+  font-size: 12px;
+}
+.mg-header.right {
+  padding-left: 0; padding-right: 0; justify-content: flex-end;
+}
+.mg-name { font-weight: 500; color: #505051; }
+.mg-time { color: #aaa; font-size: 11px; }
+
+/* Аватар + стопка пузырей */
+.mg-row {
+  display: flex; align-items: flex-end; gap: 8px;
+}
+.mg-row.right { flex-direction: row-reverse; }
+
+/* Аватар клиента — 35px */
+.mg-av {
+  width: 35px; height: 35px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 12px; font-weight: 500;
+  border: 1px solid rgba(0,0,0,.08);
+}
+
+/* Стопка пузырей */
+.mg-bubbles {
+  display: flex; flex-direction: column; gap: 4px;
+  max-width: calc(100% - 43px);
+}
+.mg-row.right .mg-bubbles { max-width: 80%; }
+
+/* Пузырь */
+.bubble {
+  padding: 10px 14px; border-radius: 8px;
+  font-size: 13px; line-height: 1.6; word-break: break-word;
+}
+.bubble-client {
+  background: #fff; color: #222427;
+  box-shadow: 0 1px 4px rgba(0,0,0,.1), 0 0 1px rgba(0,0,0,.06);
+}
+.bubble-bot {
+  background: #ECF2FE; color: #222427;
+  box-shadow: 0 1px 4px rgba(0,0,0,.1), 0 0 1px rgba(0,0,0,.06);
+}
+.msg-time { font-size: 11px; color: #bbb; margin-bottom: 2px; flex-shrink: 0; }
+
+/* ── INPUT / EDITOR ───────────────────────────────────────────── */
+.mid-input {
+  background: #fff; border: 1px solid #DCDCDC; border-radius: 8px;
+  margin: 0 16px 12px; flex-shrink: 0; overflow: hidden;
+}
+
+/* Tab bar */
+.mi-tabbar {
+  display: flex; align-items: stretch; height: 48px;
+  border-bottom: 1px solid #DCDCDC;
+}
+.mi-tabs { display: flex; flex: 1; overflow: hidden; }
+.mi-tab {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 0 14px; height: 48px; font-size: 13px; color: #38393A;
+  cursor: pointer; flex-shrink: 0; white-space: nowrap;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .12s;
+}
+.mi-tab:hover { color: #222427; }
+.mi-tab.active { color: #3D79F2; border-bottom-color: #3D79F2; }
+.mi-tab-badge {
+  background: #FFD4D9; color: #DB1436;
+  border-radius: 4px; font-size: 10px; font-weight: 600;
+  padding: 1px 4px; line-height: 1.4;
+}
+.mi-tab-ai { color: #8800FF; }
+.mi-tab-ai:hover { color: #6600CC; }
+
+.mi-channel {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px; font-size: 12px; color: #676768;
+  border-left: 1px solid #DCDCDC; flex-shrink: 0;
+  cursor: pointer; max-width: 220px;
+}
+.mi-channel:hover { background: #F8F8F8; }
+.mi-channel-text {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+}
+
+/* Reply strip */
+.mi-reply {
+  display: flex; align-items: center; gap: 8px;
+  height: 32px; padding: 0 12px;
+  border-bottom: 1px solid #F0F0F0; background: #fff;
+}
+.mi-reply-bar { width: 2px; height: 20px; border-radius: 1px; background: #3D79F2; flex-shrink: 0; }
+.mi-reply-content {
+  flex: 1; display: flex; gap: 6px; align-items: center;
+  overflow: hidden; font-size: 12px; min-width: 0;
+}
+.mi-reply-name { font-weight: 500; color: #222427; flex-shrink: 0; }
+.mi-reply-text { color: #676768; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi-reply-close {
+  background: none; border: none; cursor: pointer; color: #888;
+  padding: 4px; display: flex; border-radius: 4px; flex-shrink: 0;
+}
+.mi-reply-close:hover { background: #F0F0F0; color: #444; }
+
+/* Textarea */
+.mid-textarea {
+  width: 100%; padding: 10px 16px; min-height: 64px;
+  border: none; outline: none; font-size: 14px; font-family: inherit;
+  color: #222427; resize: none; background: transparent;
+}
+.mid-textarea::placeholder { color: #7F8085; }
+
+/* Bottom toolbar */
+.mi-toolbar {
+  display: flex; align-items: center;
+  padding: 0 8px; height: 56px;
+  border-top: 1px solid #F0F0F0;
+}
+.mi-actions { flex: 1; display: flex; align-items: center; }
+.mi-btn {
+  width: 40px; height: 40px; background: none; border: none;
+  cursor: pointer; color: #38393A;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; flex-shrink: 0;
+}
+.mi-btn:hover { background: #F0F0F0; }
+.mi-btn-ai { color: #8800FF; }
+.mi-btn-ai:hover { background: #F3EEFF; }
+
+.mi-right { display: flex; align-items: center; gap: 8px; }
+.send-btn {
+  background: #3D79F2; color: #fff; border: none; border-radius: 6px;
+  height: 40px; font-size: 13px; font-family: inherit; font-weight: 500;
+  cursor: pointer; display: flex; align-items: center; gap: 0;
+  overflow: hidden; white-space: nowrap;
+}
+.send-btn:hover { background: #2D63CC; }
+.send-btn-main {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 14px; height: 100%;
+}
+.send-btn-sep { width: 1px; height: 24px; background: rgba(255,255,255,.3); }
+.send-btn-arr {
+  display: flex; align-items: center; padding: 0 10px; height: 100%;
+}
+
+/* ── RIGHT PANEL ──────────────────────────────────────────────── */
+.panel-right {
+  width: 320px; min-width: 320px;
+  background: #fff; border-left: 1px solid #DCDCDC;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+}
+.panel-right::-webkit-scrollbar { width: 4px; }
+.panel-right::-webkit-scrollbar-thumb { background: #DDD; border-radius: 2px; }
+
+.pr-sec-hd {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 16px; border-bottom: 1px solid #F0F0F0;
+}
+.pr-grip { display: flex; align-items: center; color: #CCC; }
+.pr-sec-title { flex: 1; font-weight: 500; font-size: 14px; }
+.pr-client-block {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid #F0F0F0;
+  position: relative;
+}
+.pr-client-name { flex: 1; font-weight: 500; font-size: 14px; }
+
+.pr-vip-wrap { position: relative; }
+.pr-vip-badge {
+  position: absolute; top: -6px; left: -6px;
+  background: #0D9488; color: #fff;
+  font-size: 9px; font-weight: 700; border-radius: 4px;
+  padding: 2px 5px; white-space: nowrap;
+}
+
+.pr-contacts {
+  padding: 12px 16px; display: flex; flex-direction: column;
+  gap: 8px; border-bottom: 1px solid #F0F0F0;
+}
+.pr-contact {
+  display: flex; align-items: flex-start; gap: 10px; font-size: 13px;
+}
+.pr-contact-ico { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.pr-contact-val { color: #222427; flex: 1; line-height: 1.4; }
+.pr-see-more { color: #3260EA; font-size: 13px; cursor: pointer; padding-top: 2px; display: inline-block; }
+
+.pr-company { padding: 12px 16px; border-bottom: 1px solid #F0F0F0; }
+.pr-company-name { color: #3260EA; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 4px; }
+.pr-company-desc { font-size: 12px; color: #888; line-height: 1.5; }
+
+.pr-tickets { padding: 12px 16px; }
+.pr-tickets-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; cursor: pointer; }
+.pr-tickets-title { flex: 1; font-weight: 500; font-size: 14px; }
+
+.pr-ticket {
+  padding: 10px 0; border-top: 1px solid #F0F0F0;
+  cursor: pointer;
+}
+.pr-ticket:first-of-type { border-top: none; }
+.pr-ticket:hover .pr-ticket-preview { color: #333; }
+.pr-ticket-row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.pr-ticket-date { font-size: 11px; color: #aaa; margin-left: auto; }
+.pr-ticket-preview { font-size: 12px; color: #666; }
+
+.pr-show-more { color: #3260EA; font-size: 13px; cursor: pointer; padding: 8px 0 0; display: block; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ╔══════════ SIDEBAR ══════════╗ -->
+  <aside class="sidebar">
+    <div class="sb-logo">
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M20.0001 28C15.5819 28 12.0001 24.4183 12.0001 20C12.0001 15.5818 15.5819 12 20.0001 12C24.4184 12 28.0001 15.5818 28.0001 20C28.0001 24.4183 24.4184 28 20.0001 28ZM20.5239 4.00836C11.2733 3.71316 3.71332 11.273 4.00868 20.5236C4.27604 28.901 11.0991 35.7242 19.4767 35.9917C28.7272 36.2869 36.2872 28.7269 35.9919 19.4764C35.7244 11.0989 28.9013 4.27588 20.5239 4.00836Z" fill="#FF5166"/>
+        <mask id="mask0_2855_709" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="4" y="4" width="33" height="32">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M20.0001 28C15.5819 28 12.0001 24.4183 12.0001 20C12.0001 15.5818 15.5819 12 20.0001 12C24.4184 12 28.0001 15.5818 28.0001 20C28.0001 24.4183 24.4184 28 20.0001 28ZM20.5239 4.00836C11.2733 3.71316 3.71332 11.273 4.00868 20.5236C4.27604 28.901 11.0991 35.7242 19.4767 35.9917C28.7272 36.2869 36.2872 28.7269 35.9919 19.4764C35.7244 11.0989 28.9013 4.27588 20.5239 4.00836Z" fill="white"/>
+        </mask>
+        <g mask="url(#mask0_2855_709)">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M36 7.2L32.8 4L20 16.8L7.2 4L4 7.2L16.8 20L4 32.8L7.2 36L20 23.2L32.8 36L36 32.8L23.2 20L36 7.2Z" fill="white"/>
+        </g>
+      </svg>
+    </div>
+    <nav class="sb-nav">
+
+      <div class="sb-item" title="Поиск">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+
+      <div class="sb-item active sb-fullsvg" title="Чат">
+        <svg width="56" height="48" viewBox="0 0 56 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 24H24.01M28 24H28.01M32 24H32.01M23.9 32C25.8086 32.979 28.0041 33.2442 30.0909 32.7478C32.1777 32.2513 34.0186 31.0258 35.2818 29.2922C36.545 27.5585 37.1474 25.4307 36.9806 23.2921C36.8137 21.1536 35.8886 19.145 34.3718 17.6282C32.855 16.1114 30.8464 15.1862 28.7078 15.0194C26.5693 14.8526 24.4415 15.455 22.7078 16.7182C20.9742 17.9814 19.7487 19.8223 19.2522 21.9091C18.7558 23.9959 19.0209 26.1914 20 28.1L18 34L23.9 32Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="4" cy="4" r="5" transform="matrix(-1 0 0 1 22 10)" fill="#FF5166" stroke="white" stroke-width="2"/>
+        </svg>
+      </div>
+
+      <div class="sb-item" title="Запросы">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="m2 7 8.7 6.1a2 2 0 0 0 2.6 0L22 7" stroke="currentColor" stroke-width="2"/></svg>
+      </div>
+
+      <div class="sb-item" title="Теги">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>
+      </div>
+
+      <div class="sb-item" title="Клиенты">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="12" r="2.5" stroke="currentColor" stroke-width="2"/><path d="M5.5 19v-1a4.5 4.5 0 0 1 9 0v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M15 9h3M15 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+
+      <div class="sb-item" title="Агенты">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="5" stroke="currentColor" stroke-width="2"/><path d="M20 21a8 8 0 0 0-16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+
+      <div class="sb-item" title="База знаний">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>
+      </div>
+
+      <div class="sb-item" title="Отчеты">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+
+      <div class="sb-item" title="Каналы">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="sb-item" title="Автоматизация">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="sb-item" title="Расширения">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><polyline points="16 18 22 12 16 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="8 6 2 12 8 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="sb-item" title="ИИ" onclick="window.location.href='./'">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.937A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="sb-item" title="Контроль качества">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="8" y="2" width="8" height="4" rx="1" stroke="currentColor" stroke-width="2"/><path d="M10.42 12.61a2.1 2.1 0 1 1 2.97 2.97L7.95 21 4 22l.99-3.95 5.43-5.44z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 13.5V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+
+      <div class="sb-item" title="Настройки">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke="currentColor" stroke-width="2"/></svg>
+      </div>
+
+      <div class="sb-item" title="Начало работы">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+
+    </nav>
+  </aside>
+
+  <div class="app-main">
+
+  <!-- ╔══════════ HEADER ══════════╗ -->
+  <header class="header">
+
+    <!-- Логотип -->
+    <span class="hdr-logo">Чаты</span>
+
+    <!-- Взять чат — pill -->
+    <button class="hdr-pill">
+      Взять чат
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 3.5l3.5 3.5 3.5-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+    </button>
+
+    <div class="hdr-sep"></div>
+
+    <!-- Центральная зона — контролы чата -->
+    <div class="hdr-center" id="chatControls" style="visibility:hidden">
+
+      <!-- Левый спейсер — тянет группу к центру -->
+      <div style="flex:1"></div>
+
+      <!-- Группа кнопок по центру -->
+      <div class="hdr-cc-group">
+
+        <!-- Тумблер + ИИ бот — единый элемент -->
+        <label class="hdr-toggle" for="aiToggle">
+          <input type="checkbox" id="aiToggle" checked>
+          <span class="hdr-tgl-track"></span>
+          <span class="hdr-tgl-label">ИИ бот</span>
+        </label>
+
+        <!-- Исполнитель — дропдаун (содержимое заполняется JS) -->
+        <div class="asgn-wrap" id="asgnWrap">
+          <button class="hdr-btn" id="assigneeBtn" onclick="toggleAsgnDd(event)"></button>
+        </div>
+
+        <!-- Теги -->
+        <button class="hdr-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>
+          Теги
+        </button>
+
+        <!-- Перейти в запрос -->
+        <button class="hdr-btn">
+          Перейти в запрос
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M5 2H2.5A1.5 1.5 0 001 3.5v7A1.5 1.5 0 002.5 12h7A1.5 1.5 0 0011 10.5V8M8 1h4m0 0v4M12 1 6 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+      </div>
+
+      <!-- Правый спейсер + Завершить чат прижат к правому краю -->
+      <div class="hdr-cc-right">
+        <div class="hdr-combo" id="closeChatBtn" style="visibility:hidden">
+          <button class="hdr-combo__main">Завершить чат</button>
+          <button class="hdr-combo__arr">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 3.5l3.5 3.5 3.5-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Правая зона -->
+    <div class="hdr-right">
+
+      <!-- Создать -->
+      <button class="hdr-pill">
+        Создать
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 3.5l3.5 3.5 3.5-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+
+      <!-- Аватар агента -->
+      <div class="hdr-avatar">
+        <svg width="35" height="35" viewBox="0 0 35 35" fill="none">
+          <circle cx="17.5" cy="13.5" r="5.5" fill="rgba(255,255,255,0.75)"/>
+          <ellipse cx="17.5" cy="28" rx="10" ry="7" fill="rgba(255,255,255,0.75)"/>
+        </svg>
+      </div>
+
+    </div>
+
+  </header>
+
+  <!-- ╔══════════ BODY ══════════╗ -->
+  <div class="body">
+
+    <!-- ────────── LEFT PANEL ────────── -->
+    <aside class="panel-left">
+      <div class="pl-topbar">
+        <button class="pl-view-btn">
+          Мои
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5l3.5 3.5 3.5-3.5" stroke="#676768" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="pl-list" id="plList"></div>
+    </aside>
+
+    <!-- ────────── MIDDLE PANEL ────────── -->
+    <main class="panel-mid">
+      <div class="mid-empty" id="midEmpty">Выберите чат</div>
+
+      <div class="mid-chat" id="midChat" style="display:none; flex:1; flex-direction:column;">
+
+        <!-- messages -->
+        <div class="mid-messages" id="midMessages"></div>
+
+        <!-- editor -->
+        <div class="mid-input">
+
+          <!-- tab bar -->
+          <div class="mi-tabbar">
+            <div class="mi-tabs">
+              <div class="mi-tab active" onclick="switchTab(this)">Сообщение</div>
+              <div class="mi-tab" onclick="switchTab(this)">Комментарий <span class="mi-tab-badge">8</span></div>
+            </div>
+            <div class="mi-channel" id="miChannelEl" title="Виджет (1.7.72) https://usedesk.website/">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" fill="#29A9EA"/><path d="M11.5 5L6.8 9.2l-2-1.5L3 8.3l3.8 2.7 6.4-5.4-1.7-.6z" fill="white"/></svg>
+              <span class="mi-channel-text">Виджет (1.7.72) https://usedesk.website/</span>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+
+          <!-- reply strip (hidden by default) -->
+          <div class="mi-reply" id="miReply" style="display:none">
+            <div class="mi-reply-bar"></div>
+            <div class="mi-reply-content">
+              <span class="mi-reply-name">Олег Иванов</span>
+              <span class="mi-reply-text">При возврате товара сумма денежных средств, уплаченных Вами за товар...</span>
+            </div>
+            <button class="mi-reply-close" onclick="document.getElementById('miReply').style.display='none'">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+
+          <!-- textarea -->
+          <textarea class="mid-textarea" id="msgTextarea" placeholder="Написать сообщение..."
+            onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();sendMessage();}"></textarea>
+
+          <!-- toolbar -->
+          <div class="mi-toolbar">
+            <div class="mi-actions">
+              <button class="mi-btn" title="HTML-редактор">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M8 7L3 12l5 5M16 7l5 5-5 5M14 4l-4 16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="mi-btn" title="Прикрепить файл">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="mi-btn" title="Форматирование текста">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h10M12 7v10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              </button>
+              <button class="mi-btn" title="Шаблоны ответов">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 11h12M3 16h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              </button>
+              <button class="mi-btn" title="Эмодзи">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><circle cx="8.5" cy="10" r="1.2" fill="currentColor"/><circle cx="15.5" cy="10" r="1.2" fill="currentColor"/><path d="M8 15.5s1.5 2 4 2 4-2 4-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              </button>
+              <button class="mi-btn mi-btn-ai" title="AI-ассистент">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 5.5 5.5 2-5.5 2L12 17l-2-5.5L4.5 9.5 10 7.5 12 2z"/><path d="M5.5 17.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1 1-2.5z" opacity=".6"/></svg>
+              </button>
+            </div>
+            <div class="mi-right">
+              <button class="send-btn" onclick="sendMessage()">
+                <span class="send-btn-main">Отправить</span>
+                <span class="send-btn-sep"></span>
+                <span class="send-btn-arr">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+
+    <!-- ────────── RIGHT PANEL ────────── -->
+    <aside class="panel-right">
+
+      <!-- Section header -->
+      <div class="pr-sec-hd">
+        <div class="pr-grip">
+          <svg width="10" height="16" viewBox="0 0 10 16" fill="none">
+            <circle cx="3" cy="3" r="1.4" fill="currentColor"/><circle cx="7" cy="3" r="1.4" fill="currentColor"/>
+            <circle cx="3" cy="8" r="1.4" fill="currentColor"/><circle cx="7" cy="8" r="1.4" fill="currentColor"/>
+            <circle cx="3" cy="13" r="1.4" fill="currentColor"/><circle cx="7" cy="13" r="1.4" fill="currentColor"/>
+          </svg>
+        </div>
+        <span class="pr-sec-title">Информация о клиенте</span>
+        <div class="icon-btn" style="color:#aaa">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+
+      <!-- Client -->
+      <div class="pr-client-block">
+        <div class="pr-vip-wrap">
+          <div class="avatar avatar-48 c-purple">КИ</div>
+          <div class="pr-vip-badge">VIP</div>
+        </div>
+        <span class="pr-client-name">Имя Клиента</span>
+        <button class="icon-btn">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="4" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="12" r="1.3" fill="currentColor"/></svg>
+        </button>
+      </div>
+
+      <!-- Contacts -->
+      <div class="pr-contacts">
+        <div class="pr-contact">
+          <div class="pr-contact-ico">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3a1 1 0 011-1h2.5l.9 2.8-1.4 1.4a9 9 0 005.3 5.3l1.4-1.4 2.8.9V13a1 1 0 01-1 1C6.4 14 2 9.6 2 4a1 1 0 010-1z" stroke="#25D366" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span class="pr-contact-val">+7 (965) 425 89-23</span>
+        </div>
+        <div class="pr-contact">
+          <div class="pr-contact-ico">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="#888" stroke-width="1.4"/><path d="M1.5 5.5l6.5 4 6.5-4" stroke="#888" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </div>
+          <span class="pr-contact-val">v@usedesk.ru</span>
+        </div>
+        <div class="pr-contact">
+          <div class="pr-contact-ico">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="#888" stroke-width="1.4"/><path d="M1.5 5.5l6.5 4 6.5-4" stroke="#888" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </div>
+          <span class="pr-contact-val" style="font-weight:500">v.simonov@usedesk.ru</span>
+        </div>
+        <div class="pr-contact">
+          <div class="pr-contact-ico">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#888" stroke-width="1.4"/><path d="M1.5 8h13M8 2a13 13 0 000 12M8 2a13 13 0 010 12" stroke="#888" stroke-width="1.4"/></svg>
+          </div>
+          <span class="pr-contact-val">website.com</span>
+        </div>
+        <div class="pr-contact">
+          <div class="pr-contact-ico" style="color:#EF4444">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6c0 3.75 4.5 8.5 4.5 8.5S12.5 9.75 12.5 6c0-2.5-2-4.5-4.5-4.5zm0 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" fill="currentColor"/></svg>
+          </div>
+          <span class="pr-contact-val">110115, г. Москва, ул. Земляной Вал, д...</span>
+        </div>
+        <span class="pr-see-more">Ещё {N}</span>
+      </div>
+
+      <!-- Company -->
+      <div class="pr-company">
+        <div class="pr-company-name">ООО Ромашка</div>
+        <div class="pr-company-desc">Хороший клиент, три раза проводил обучение сотрудников</div>
+      </div>
+
+      <!-- Tickets -->
+      <div class="pr-tickets">
+        <div class="pr-tickets-hd">
+          <div class="pr-grip">
+            <svg width="10" height="16" viewBox="0 0 10 16" fill="none">
+              <circle cx="3" cy="3" r="1.4" fill="currentColor"/><circle cx="7" cy="3" r="1.4" fill="currentColor"/>
+              <circle cx="3" cy="8" r="1.4" fill="currentColor"/><circle cx="7" cy="8" r="1.4" fill="currentColor"/>
+              <circle cx="3" cy="13" r="1.4" fill="currentColor"/><circle cx="7" cy="13" r="1.4" fill="currentColor"/>
+            </svg>
+          </div>
+          <span class="pr-tickets-title">Запросы клиента</span>
+          <div class="icon-btn" style="color:#aaa">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+
+        <div class="pr-ticket">
+          <div class="pr-ticket-row1">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#888" stroke-width="1.4"/><path d="M5 8h6M5 5.5h6M5 10.5h4" stroke="#888" stroke-width="1.4" stroke-linecap="round"/></svg>
+            <span class="status-open">Открыт</span>
+            <span class="pr-ticket-date">26 мая 07:57</span>
+          </div>
+          <div class="pr-ticket-preview">Здравствуйте, как у вас сменить пароль?</div>
+        </div>
+
+        <div class="pr-ticket">
+          <div class="pr-ticket-row1">
+            <!-- Одноклассники -->
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="#F7931E"/><circle cx="8" cy="6" r="2.2" fill="#fff"/><path d="M4.5 11c0-1.9 1.6-3.5 3.5-3.5s3.5 1.6 3.5 3.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M6.2 12.8L8 11l1.8 1.8" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
+            <span class="status-open">Открыт</span>
+            <span class="pr-ticket-date">25 мая 18:16</span>
+          </div>
+          <div class="pr-ticket-preview">При открытии страницы не...</div>
+        </div>
+
+        <div class="pr-ticket">
+          <div class="pr-ticket-row1">
+            <!-- Slack -->
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.5 2.5a1.5 1.5 0 100 3H7V4A1.5 1.5 0 005.5 2.5z" fill="#E01E5A"/><path d="M5.5 7H2a1.5 1.5 0 100 3h3.5V7z" fill="#E01E5A"/><path d="M13.5 8.5a1.5 1.5 0 10-3 0V10H12a1.5 1.5 0 001.5-1.5z" fill="#2EB67D"/><path d="M9 8.5V12h1.5a1.5 1.5 0 100-3H9z" fill="#2EB67D"/><path d="M12 6.5A1.5 1.5 0 0010.5 5H9v1.5h1.5A1.5 1.5 0 0012 5z" fill="#ECB22E"/><path d="M6 5v1.5h3.5V5A1.5 1.5 0 006 5z" fill="#ECB22E"/><path d="M4 10.5A1.5 1.5 0 005.5 12H7v-1.5H5.5A1.5 1.5 0 004 10z" fill="#36C5F0"/><path d="M7 9v3h1.5a1.5 1.5 0 000-3H7z" fill="#36C5F0"/></svg>
+            <span class="status-open">Открыт</span>
+            <span class="pr-ticket-date">25 мая 11:35</span>
+          </div>
+          <div class="pr-ticket-preview">Хороший клиент, три раза проводи...</div>
+        </div>
+
+        <div class="pr-ticket">
+          <div class="pr-ticket-row1">
+            <!-- Twitter/X -->
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="#1DA1F2"/><path d="M12 5.5a3.5 3.5 0 01-1 .27 1.75 1.75 0 00.77-1.02c-.34.2-.72.34-1.12.42A1.75 1.75 0 008 7a4.95 4.95 0 01-3.6-1.83A1.75 1.75 0 005 7.55a3.5 3.5 0 01-.79-.22v.02a1.75 1.75 0 001.4 1.71c-.27.08-.55.09-.8.03a1.75 1.75 0 001.63 1.22A3.52 3.52 0 014 11a4.96 4.96 0 002.69.79c3.23 0 4.99-2.67 4.99-4.98v-.23A3.55 3.55 0 0012 5.5z" fill="#fff"/></svg>
+            <span class="status-open">Открыт</span>
+            <span class="pr-ticket-date">25 мая 01:42</span>
+          </div>
+          <div class="pr-ticket-preview">Хороший клиент, проводил обучени...</div>
+        </div>
+
+        <div class="pr-ticket">
+          <div class="pr-ticket-row1">
+            <!-- Telegram -->
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="#229ED9"/><path d="M3.5 8.2l8.5-3.3-1.5 7.1-3-2.2-1.5 1.5V9l-2.5-0.8z" fill="#fff"/></svg>
+            <span class="status-hold">На удержании</span>
+            <span class="pr-ticket-date">24 мая 21:24</span>
+          </div>
+          <div class="pr-ticket-preview">Не могу запустить, вот скрин</div>
+        </div>
+
+        <span class="pr-show-more">Показать ещё</span>
+      </div>
+
+    </aside>
+  </div>
+
+  </div><!-- /app-main -->
+</div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────
+
+const CHATS = [
+  { id:1, name:'Константин Иванов', channel:'wa',    time:'12ч 21м', preview:'Краткий текст последнего сообщ...', unread:1, tags:['SPAM'],  color:'c-purple', overdue:true },
+  { id:2, name:'Константин Иванов', channel:'tg',    time:'12ч 21м', preview:'Краткий текст последнего сообщ...', unread:1, tags:[],        color:'c-purple' },
+  { id:3, name:'Константин Иванов', channel:'tg',    time:'12ч 21м', preview:'Краткий текст последнего сообщ...', unread:1, tags:[],        color:'c-blue'   },
+  { id:4, name:'Константин Иванов', channel:'wa',    time:'12ч 21м', preview:'Краткий текст',                    unread:0, tags:[],        color:'c-orange' },
+  { id:5, name:'Константин Иванов', channel:'tg',    time:'12ч 21м', preview:'Краткий текст',                    unread:0, tags:[],        color:'c-green'  },
+  { id:6, name:'Константин Иванов', channel:'wa',    time:'12ч 21м', preview:'Краткий текст',                    unread:0, tags:['VIP'],   color:'c-purple' },
+  { id:7, name:'Константин Иванов', channel:'tg',    time:'12ч 21м', preview:'Краткий текст',                    unread:0, tags:[],        color:'c-pink'   },
+  { id:8, name:'Константин Иванов', channel:'email', time:'12ч 21м', preview:'Краткий текст',                    unread:0, tags:[],        color:'c-blue'   },
+];
+
+const SECTIONS = [
+  { label:'Группа',          count:'99+', chatIds:[1,2,3,4,5,6,7,8], collapsed:false },
+  { label:'Неназначенные',   count:'99+', chatIds:[],                collapsed:true  },
+  { label:'Все чаты',        count:'99+', chatIds:[],                collapsed:true  },
+  { label:'Пропущенные',     count:'99+', chatIds:[],                collapsed:true  },
+];
+
+const MESSAGES = [
+  { date:'11 мая 2025', msgs:[
+    { side:'client', name:'Константин Иванов', color:'c-purple', time:'11:24',
+      texts:['Только материалы исключения и вклочки тегов, выбирать «Корпоративный». Я поняла, боюсь что только ИИ воспользоваться успела. Ой, вот было очень плохо, жалко ничего не сохранялось.',
+             'Только материалы исключения и вклочки тегов, выбирать «Корпоративный» и «продам». Только материалы исключения и вклочки тегов.'] },
+    { side:'bot',    name:'ИИ бот', time:'11:26',
+      texts:['Только материалы исключения и вклочки тегов, выбирать «Корпоративный» и «продам». Только материалы исключения и вклочки тегов. Вы указали только тему сообщения.'] },
+    { side:'client', name:'Константин Иванов', color:'c-purple', time:'11:30',
+      texts:['Ой, а есть ли возможность снова отдать тему материалов? Только материалы исключения и вклочки тегов, выбирать «Корпоративный» и «продам». Только материалы исключения.'] },
+  ]},
+  { date:'Сегодня', msgs:[
+    { side:'bot',    name:'ИИ бот', time:'09:14',
+      texts:['На самом деле, это не так легко, как кажется. Только материалы исключения и вклочки тегов, выбирать «Корпоративный». Я поняла, боюсь что только ИИ воспользоваться успела.'] },
+    { side:'client', name:'Константин Иванов', color:'c-purple', time:'09:18',
+      texts:['На самом деле, это не так легко, как кажется. Только материалы исключения и вклочки тегов, выбирать «Корпоративный». Я поняла, боюсь.',
+             'Краткий текст последнего сообщения.'] },
+  ]},
+];
+
+let selectedId = null;
+
+// ── HELPERS ──────────────────────────────────────────────────────
+
+function initials(name) {
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+const AVATAR_COLORS = ['#7C3AED','#2563EB','#059669','#D97706','#DB2777','#0D9488','#6B7280','#B45309'];
+
+function chIconHtml(ch) {
+  const icons = {
+    wa: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill="#48C857"/>
+      <path d="M11.5 9.8c-.2-.1-1.2-.6-1.4-.7-.2-.1-.3-.1-.5.1-.1.2-.5.7-.6.8-.1.1-.2.1-.4 0-.2-.1-.9-.3-1.7-1-.6-.6-1-1.3-1.2-1.5-.1-.2 0-.3.1-.4l.3-.4c.1-.1.1-.2.2-.3 0-.1 0-.2 0-.3L5.7 4.9c-.1-.3-.3-.3-.4-.3H5c-.2 0-.4.1-.6.3-.2.2-.7.7-.7 1.7s.7 2 .8 2.1c.1.1 1.4 2.1 3.3 2.9.5.2.8.3 1.1.4.5.1.9.1 1.2.1.4-.1 1.2-.5 1.3-1 .2-.5.2-.9.1-1-.1-.1-.2-.2-.4-.3z" fill="white"/>
+    </svg>`,
+    tg: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill="#229ED9"/>
+      <path d="M3.8 8l6.4-2.5-1.2 5.7-1.8-1.7-1 1V9.2L10.2 5.5l-4.6 3" stroke="white" stroke-width=".6" fill="none"/>
+    </svg>`,
+    email: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill="#6B7280"/>
+      <rect x="3.5" y="5" width="9" height="6" rx="1" stroke="white" stroke-width="1.2"/>
+      <path d="M3.5 6l4.5 3 4.5-3" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+    </svg>`,
+  };
+  return icons[ch] || icons.email;
+}
+
+function avatarHtml(c, tagHtml) {
+  const color = AVATAR_COLORS[c.id % AVATAR_COLORS.length];
+  const inits = c.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  return `
+    <div class="pl-avatar-wrap">
+      <div style="width:27px;height:27px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:500;border:1px solid rgba(0,0,0,.08)">${inits}</div>
+      <div class="pl-online"></div>
+      ${tagHtml}
+    </div>`;
+}
+
+function tagOverlay(tag) {
+  if (tag === 'SPAM') return `<div class="pl-tag-wrap pl-tag-spam">SPAM</div>`;
+  if (tag === 'VIP')  return `<div class="pl-tag-wrap pl-tag-vip">VIP</div>`;
+  return '';
+}
+
+// ── LEFT PANEL ────────────────────────────────────────────────────
+
+function renderLeft() {
+  const chevronSvg = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5l3.5 3.5 3.5-3.5" stroke="#676768" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+  let html = '';
+  SECTIONS.forEach((sec, si) => {
+    html += `
+      <div class="pl-section-hd" onclick="toggleSection(${si})">
+        <span class="pl-section-name">${sec.label}</span>
+        <span class="badge-section">${sec.count}</span>
+        <span class="pl-chevron ${sec.collapsed ? '' : 'up'}">${chevronSvg}</span>
+      </div>`;
+
+    if (!sec.collapsed) {
+      sec.chatIds.forEach(cid => {
+        const c = CHATS.find(x => x.id === cid);
+        if (!c) return;
+        const active = selectedId === cid;
+        const tag = c.tags[0] ? tagOverlay(c.tags[0]) : '';
+        html += `
+          <div class="pl-chat${active ? ' active' : ''}" onclick="selectChat(${cid})">
+            ${avatarHtml(c, tag)}
+            <div class="pl-chat-body">
+              <div class="pl-row1">
+                ${chIconHtml(c.channel)}
+                <span class="pl-name">${c.name}</span>
+                ${c.unread ? `<span class="badge-unread">${c.unread}</span>` : ''}
+              </div>
+              <div class="pl-row2">
+                <span class="pl-preview">${c.preview}</span>
+                <span class="${c.overdue ? 'pl-time-red' : 'pl-time'}">${c.time}</span>
+              </div>
+            </div>
+          </div>`;
+      });
+    }
+  });
+  document.getElementById('plList').innerHTML = html;
+}
+
+function toggleSection(i) {
+  SECTIONS[i].collapsed = !SECTIONS[i].collapsed;
+  renderLeft();
+}
+
+// ── MIDDLE PANEL ──────────────────────────────────────────────────
+
+function renderMessages() {
+  const COLOR_MAP = {
+    'c-purple':'#7C3AED','c-blue':'#2563EB','c-green':'#059669',
+    'c-orange':'#D97706','c-pink':'#DB2777','c-teal':'#0D9488','c-gray':'#6B7280'
+  };
+
+  let html = '';
+  MESSAGES.forEach(block => {
+    html += `<div class="msg-date-sep">${block.date}</div>`;
+    block.msgs.forEach(m => {
+      const isClient = m.side === 'client';
+      const bgColor = COLOR_MAP[m.color] || '#6B7280';
+      const inits = initials(m.name);
+
+      html += `<div class="msg-group">`;
+
+      if (isClient) {
+        html += `<div class="mg-header">
+          <span class="mg-name">${m.name}</span>
+          <span class="mg-time">${m.time}</span>
+        </div>
+        <div class="mg-row">
+          <div class="mg-av" style="background:${bgColor}">${inits}</div>
+          <div class="mg-bubbles">
+            ${m.texts.map(txt => `<div class="bubble bubble-client">${txt}</div>`).join('')}
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="mg-header right">
+          <span class="mg-time">${m.time}</span>
+          <span class="mg-name">${m.name}</span>
+        </div>
+        <div class="mg-row right">
+          <div class="mg-bubbles">
+            ${m.texts.map(txt => `<div class="bubble bubble-bot">${txt}</div>`).join('')}
+          </div>
+        </div>`;
+      }
+
+      html += `</div>`;
+    });
+  });
+
+  document.getElementById('midMessages').innerHTML = html;
+  const el = document.getElementById('midMessages');
+  el.scrollTop = el.scrollHeight;
+}
+
+function selectChat(id) {
+  selectedId = id;
+  renderLeft();
+
+  const chat = CHATS.find(c => c.id === id);
+
+  // show chat
+  document.getElementById('midEmpty').style.display = 'none';
+  const midChat = document.getElementById('midChat');
+  midChat.style.display = 'flex';
+
+  // show header controls
+  document.getElementById('chatControls').style.visibility = 'visible';
+  document.getElementById('closeChatBtn').style.visibility = 'visible';
+
+  renderMessages();
+}
+
+// ── TABS ──────────────────────────────────────────────────────────
+
+function switchTab(el) {
+  el.closest('.mi-tabs').querySelectorAll('.mi-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── ASSIGNEE BUTTON ───────────────────────────────────────────────
+
+const _CHEVRON = `<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 3.5l3.5 3.5 3.5-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+
+const _BOT_ICO = `<svg width="16" height="16" viewBox="16 12 16 16" fill="none">
+  <path d="M21.4871 22.126L22.2507 22.2754C22.4732 22.3202 22.6773 22.4283 22.8396 22.585L22.907 22.6553L24.2839 24.2412L24.2917 24.251C24.4059 24.3781 24.5535 24.4709 24.7175 24.5186C24.8548 24.5584 24.9986 24.5629 25.1384 24.5371L24.4314 25.9863L24.4275 25.9932C24.3908 26.0703 24.3328 26.1352 24.2605 26.1807C24.1882 26.2261 24.1046 26.2503 24.0193 26.25H24.0154C23.8271 26.25 23.6707 26.1568 23.5916 25.9912L23.5876 25.9834L21.8923 22.5439L21.8904 22.54L21.8308 22.4346C21.7662 22.3362 21.6581 22.2123 21.4871 22.126Z" fill="black" stroke="#505051" stroke-width="1.5"/>
+  <path d="M29.9792 19.5732L30.0466 19.6064C30.0979 19.6425 30.1421 19.6877 30.1755 19.7412C30.222 19.8158 30.2468 19.9024 30.2468 19.9902C30.2468 20.078 30.2219 20.1638 30.1755 20.2383C30.1291 20.3128 30.063 20.3734 29.9841 20.4121L29.9822 20.4131L26.573 22.0996C26.3993 22.1738 26.2246 22.3109 26.1199 22.5225L26.2693 21.751C26.3216 21.4966 26.4562 21.2663 26.6521 21.0957L26.6531 21.0947L28.2351 19.7129C28.5162 19.4701 28.597 19.1551 28.5427 18.8682L29.9792 19.5732Z" fill="black" stroke="#505051" stroke-width="1.5"/>
+  <path d="M21.7195 18.251C21.6681 18.5045 21.5357 18.7344 21.3416 18.9053L19.7566 20.29L19.7332 20.3115C19.6439 20.3964 19.5729 20.4981 19.5242 20.6104L19.4832 20.7266C19.4452 20.8614 19.4404 21.0025 19.4656 21.1396L18.0144 20.4307H18.0125C17.9331 20.3921 17.8659 20.3316 17.8191 20.2568C17.7724 20.1822 17.7479 20.0958 17.7478 20.0078C17.7478 19.9196 17.7723 19.8326 17.8191 19.7578C17.8659 19.6831 17.9332 19.6235 18.0125 19.585L18.0154 19.583L21.4558 17.8936L21.4548 17.8916C21.5621 17.8408 21.6593 17.7711 21.739 17.6826C21.7896 17.6264 21.8321 17.5636 21.8669 17.4971L21.7195 18.251Z" fill="black" stroke="#505051" stroke-width="1.5"/>
+  <path d="M23.9998 13.75C24.1677 13.75 24.3267 13.8387 24.408 14.0088L24.4128 14.0166L26.0964 17.4307C26.1409 17.5346 26.2045 17.6296 26.2849 17.71C26.3487 17.7737 26.4224 17.8256 26.5017 17.8672L25.7576 17.7236L25.7537 17.7227C25.5106 17.6769 25.2815 17.5418 25.0964 17.3369L23.7029 15.7539L23.6794 15.7285L23.5876 15.6455C23.5231 15.5946 23.4515 15.5533 23.3757 15.5215L23.2585 15.4805L23.1375 15.457C23.0491 15.4457 22.9597 15.4483 22.8718 15.4629L23.5876 14.0176L23.5916 14.0088C23.6728 13.8388 23.8319 13.7501 23.9998 13.75Z" fill="black" stroke="#505051" stroke-width="1.5"/>
+</svg>`;
+
+const AGENTS = [
+  { id:'bot', name:'ИИ бот',           bot:true },
+  { id:'a1',  name:'Иванов Иван',      initials:'ИИ', color:'#2563EB' },
+  { id:'a2',  name:'Петрова Мария',    initials:'ПМ', color:'#DB2777' },
+  { id:'a3',  name:'Сидоров Алексей',  initials:'СА', color:'#059669' },
+  { id:'a4',  name:'Козлова Анна',     initials:'КА', color:'#D97706' },
+  { id:'a5',  name:'Новиков Дмитрий',  initials:'НД', color:'#7C3AED' },
+  { id:'e1',  name:'Захаров Олег',     initials:'ЗО', color:'#0891B2' },
+  { id:'e2',  name:'Белова Татьяна',   initials:'БТ', color:'#BE185D' },
+  { id:'e3',  name:'Морозов Андрей',   initials:'МА', color:'#15803D' },
+];
+let selectedAgent = AGENTS[0];
+
+function agentIconHtml(a) {
+  if (a.bot) return _BOT_ICO;
+  return `<span class="asgn-av" style="background:${a.color}">${a.initials}</span>`;
+}
+
+function updateAssigneeBtn() {
+  const btn = document.getElementById('assigneeBtn');
+  btn.innerHTML = agentIconHtml(selectedAgent) + ' ' + selectedAgent.name + ' ' + _CHEVRON;
+}
+
+function toggleAsgnDd(e) {
+  e.stopPropagation();
+  const wrap = document.getElementById('asgnWrap');
+  const existing = wrap.querySelector('.asgn-dd');
+  if (existing) { existing.remove(); return; }
+
+  const dd = document.createElement('div');
+  dd.className = 'asgn-dd';
+  dd.innerHTML = AGENTS.map(a => `
+    <div class="asgn-opt${a.id === selectedAgent.id ? ' sel' : ''}" onclick="selectAgent('${a.id}')">
+      ${agentIconHtml(a)}
+      <span>${a.name}</span>
+    </div>`).join('');
+  wrap.appendChild(dd);
+}
+
+function selectAgent(id) {
+  selectedAgent = AGENTS.find(a => a.id === id);
+  if (!selectedAgent.bot) document.getElementById('aiToggle').checked = false;
+  updateAssigneeBtn();
+  const dd = document.getElementById('asgnWrap').querySelector('.asgn-dd');
+  if (dd) dd.remove();
+}
+
+document.addEventListener('click', () => {
+  const dd = document.getElementById('asgnWrap')?.querySelector('.asgn-dd');
+  if (dd) dd.remove();
+});
+
+document.getElementById('aiToggle').addEventListener('change', e => {
+  if (e.target.checked) {
+    selectedAgent = AGENTS[0];
+  } else {
+    selectedAgent = AGENTS.length > 1 ? AGENTS[1] : AGENTS[0];
+  }
+  updateAssigneeBtn();
+});
+
+// ── SEND MESSAGE ──────────────────────────────────────────────────
+
+function sendMessage() {
+  if (!selectedId) return;
+  const ta = document.getElementById('msgTextarea');
+  const text = ta.value.trim();
+  if (!text) return;
+
+  const now = new Date();
+  const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+
+  let todayBlock = MESSAGES.find(b => b.date === 'Сегодня');
+  if (!todayBlock) {
+    todayBlock = { date: 'Сегодня', msgs: [] };
+    MESSAGES.push(todayBlock);
+  }
+
+  todayBlock.msgs.push({ side: 'bot', name: 'Вы', time, texts: [text] });
+
+  ta.value = '';
+  renderMessages();
+}
+
+// ── BOT CONFIG FROM URL ───────────────────────────────────────────
+
+const CH_DISPLAY = {
+  ch1: { label: 'Чат на сайте',
+    icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="10" rx="2" stroke="#676768" stroke-width="1.3"/><path d="M5 15h6M8 12v3" stroke="#676768" stroke-width="1.3" stroke-linecap="round"/></svg>` },
+  ch2: { label: 'Telegram',
+    icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" fill="#29A9EA"/><path d="M11.5 5L6.8 9.2l-2-1.5L3 8.3l3.8 2.7 6.4-5.4-1.7-.6z" fill="white"/></svg>` },
+  ch3: { label: 'WhatsApp',
+    icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" fill="#48C857"/><path d="M11.5 9.8c-.2-.1-1.2-.6-1.4-.7-.2-.1-.3-.1-.5.1-.1.2-.5.7-.6.8-.1.1-.2.1-.4 0-.2-.1-.9-.3-1.7-1-.6-.6-1-1.3-1.2-1.5-.1-.2 0-.3.1-.4l.3-.4c.1-.1.1-.2.2-.3 0-.1 0-.2 0-.3L5.7 4.9c-.1-.3-.3-.3-.4-.3H5c-.2 0-.4.1-.6.3-.2.2-.7.7-.7 1.7s.7 2 .8 2.1c.1.1 1.4 2.1 3.3 2.9.5.2.8.3 1.1.4.5.1.9.1 1.2.1.4-.1 1.2-.5 1.3-1 .2-.5.2-.9.1-1-.1-.1-.2-.2-.4-.3z" fill="white"/></svg>` },
+  ch4: { label: 'ВКонтакте',
+    icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7.5" fill="#4C75A3"/><path d="M8.5 10.5c-3 0-4.7-2-4.8-5.5h1.5c.1 2.5 1.1 3.5 2 3.7V5H8.6v2c.9-.1 1.8-1 2.1-2h1.4c-.2 1.3-1.1 2.2-1.7 2.6.7.3 1.7 1.1 2.1 2.9H11c-.4-1.2-1.2-2.1-2.4-2.3V10.5H8.5z" fill="white"/></svg>` },
+  ch5: { label: 'Все каналы',
+    icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#676768" stroke-width="1.3"/><path d="M8 1.5C8 1.5 5.5 4 5.5 8s2.5 6.5 2.5 6.5M8 1.5C8 1.5 10.5 4 10.5 8S8 14.5 8 14.5M1.5 8h13" stroke="#676768" stroke-width="1.3"/></svg>` },
+};
+
+const ASGN_NAMES = {
+  ag1: 'Смирнов Максим', ag2: 'Петрова Анна', ag3: 'Иванов Сергей',
+  gr1: 'Группа поддержки', gr2: 'Первая линия',
+};
+const ASGN_COLORS = ['#2563EB','#DB2777','#059669','#D97706','#7C3AED'];
+const _CHEVRON_CH = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function applyBotConfig() {
+  const p = new URLSearchParams(window.location.search);
+  if (!p.has('botName') && !p.has('enabled')) return;
+
+  const botName     = p.get('botName') || 'ИИ бот';
+  const enabled     = p.get('enabled') === '1';
+  const channelIds  = (p.get('channels')  || '').split(',').filter(Boolean);
+  const assigneeIds = (p.get('assignees') || '').split(',').filter(Boolean);
+  // Имя бота
+  AGENTS[0].name = botName;
+  MESSAGES.forEach(b => b.msgs.forEach(m => { if (m.side === 'bot') m.name = botName; }));
+
+  // ИИ-тумблер
+  document.getElementById('aiToggle').checked = enabled;
+  if (enabled) selectedAgent = AGENTS[0];
+
+  // Канал в редакторе
+  if (channelIds.length > 0) {
+    const ch = CH_DISPLAY[channelIds[0]];
+    if (ch) {
+      document.querySelector('#miChannelEl').innerHTML =
+        ch.icon + `<span class="mi-channel-text">${ch.label}</span>` + _CHEVRON_CH;
+    }
+  }
+
+  // Агенты из настроек чатбота + фиксированные доп. агенты команды
+  if (assigneeIds.length > 0) {
+    AGENTS.splice(1);
+    assigneeIds.forEach((id, i) => {
+      const name = ASGN_NAMES[id];
+      if (!name) return;
+      const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+      AGENTS.push({ id: 'a' + (i + 1), name, initials, color: ASGN_COLORS[i % ASGN_COLORS.length] });
+    });
+    AGENTS.push(
+      { id:'e1', name:'Захаров Олег',   initials:'ЗО', color:'#0891B2' },
+      { id:'e2', name:'Белова Татьяна', initials:'БТ', color:'#BE185D' },
+      { id:'e3', name:'Морозов Андрей', initials:'МА', color:'#15803D' },
+    );
+  }
+
+  // При выключении тумблера — переназначаем на первого агента из настроек
+  if (!enabled && AGENTS.length > 1) {
+    selectedAgent = AGENTS[1];
+  }
+
+
+  updateAssigneeBtn();
+}
+
+// ── INIT ──────────────────────────────────────────────────────────
+
+renderLeft();
+updateAssigneeBtn();
+applyBotConfig();
+</script>
+</body>
+</html>
