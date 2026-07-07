@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import './App.css';
 import usedeskLogo from './usedesk_logo.svg';
-import chatIllustration from './chat-illustration.png';
 import {
   Search, MessageCircleMore, Mail, Tag, IdCard, UserRound, CircleHelp,
   FileText, Inbox, Zap, Code2, Bot, ClipboardPen, Settings, Info,
@@ -249,7 +248,7 @@ export default function App() {
   const [chatInput,       setChatInput]       = useState('');
   const [botTyping,       setBotTyping]       = useState(null); // id версии, в чате которой бот печатает
   const [testingLoading,  setTestingLoading]  = useState(false);
-  const [trainedSnapshot, setTrainedSnapshot] = useState(null); // Set of article ids at training time
+  const [trainedSnapshot, setTrainedSnapshot] = useState(() => _INIT.trainedSnapshot ? new Set(_INIT.trainedSnapshot) : null); // Set of article ids at training time
   const [updatedIds,      setUpdatedIds]      = useState(() => new Set(INITIAL_UPDATED_IDS)); // статьи с непримененными обновлениями
   const [updateHover,     setUpdateHover]     = useState(false);
   const [toggleBtnHover,    setToggleBtnHover]    = useState(false); // тултип на кнопке «Включить»/«Выключить» в настройках
@@ -264,13 +263,24 @@ export default function App() {
   const [confirmGroupOpen, setConfirmGroupOpen] = useState({ added: false, removed: false });
   const messagesEndRef = useRef(null);
 
+  // Материалы, на которых обучена версия — фиксируются в момент обучения и больше не меняются
+  const [materialsByVersion, setMaterialsByVersion] = useState(() => {
+    const raw = _INIT.materialsByVersion || {};
+    const out = {};
+    Object.keys(raw).forEach(id => { out[id] = new Set(raw[id]); });
+    return out;
+  }); // { [versionId]: Set(articleId) }
+
   // Settings state — свои настройки у каждой версии
   const [settingsByVersion, setSettingsByVersion] = useState(_INIT.settingsByVersion || {}); // { [versionId]: BLANK_SETTINGS }
+  // Последний СОХРАНЁННЫЙ снимок редактируемых полей настроек — для отката по «Уйти без сохранения»
+  const [savedSettingsByVersion, setSavedSettingsByVersion] = useState(_INIT.savedSettingsByVersion || {}); // { [versionId]: { botName, channels, assignees, transferText, avatarUrl } }
   const [showChannelsDrop,setShowChannelsDrop]= useState(false);
   const [showAssignDrop,  setShowAssignDrop]  = useState(false);
   const [saveState,       setSaveState]       = useState(null); // null | 'saving' | 'saved'
   const [toast,           setToast]           = useState(null); // { text, type }
   const [confirmEnable,   setConfirmEnable]   = useState(null); // { otherLabel, launching } — модалка конфликта версий
+  const [confirmDirtyNav, setConfirmDirtyNav] = useState(null); // { targetTab } — модалка несохранённых изменений при уходе с вкладки настроек
   const [historyOpen,     setHistoryOpen]     = useState(false); // шторка «История работы»
   const [botEverLaunched, setBotEverLaunched] = useState(_INIT.botEverLaunched || false); // бот хоть раз запускался
   const [infoOpen,        setInfoOpen]        = useState(false); // панель статусов запуска
@@ -319,6 +329,12 @@ export default function App() {
   // вкладки настроек/инструкций появляются только после него. При дообучении версия есть,
   // поэтому эти вкладки не исчезают на время прогона.
   const everTrained = versions.length > 0;
+  // Просматриваемая версия — не последняя: её материалы зафиксированы и не редактируются,
+  // редактировать (готовить материалы для следующей версии) можно только последнюю.
+  const latestVersionId = versions.length ? versions[versions.length - 1].id : null;
+  const viewingHistoricalVersion = everTrained && currentVersion !== null && currentVersion !== latestVersionId;
+  const isFirstVersion = versions.length > 0 && versions[0].id === currentVersion; // первичное обучение vs дообучение — разные заглушки на «Тестировании»
+  const displaySelected = viewingHistoricalVersion ? (materialsByVersion[currentVersion] || new Set()) : selected;
   const allArticles = KNOWLEDGE_BASES.flatMap(kb => kb.sections.flatMap(s => s.categories.flatMap(c => c.articles)));
   // Точка/плашка — только для УЖЕ ОБУЧЕННЫХ материалов, в которых появилось обновление.
   // trainedSnapshot — набор статей на момент обучения; updated — у статьи есть обновление.
@@ -326,21 +342,23 @@ export default function App() {
   const hasUpdates = allArticles.some(articleHasUpdate);
   const hasFiles   = files.some(f => f.status === 'uploaded');
 
-  // total selected article chars across all KBs
+  // total selected article chars across all KBs (для просматриваемой версии, см. displaySelected)
   const totalSelectedChars = KNOWLEDGE_BASES
     .flatMap(kb => kb.sections.flatMap(s => s.categories.flatMap(c => c.articles)))
-    .filter(a => selected.has(a.id))
+    .filter(a => displaySelected.has(a.id))
     .reduce((acc, a) => acc + a.chars, 0);
 
   const canTrain = selected.size > 0 || hasFiles;
 
   function toggle(id, e) {
     e?.stopPropagation();
+    if (viewingHistoricalVersion) return; // материалы прошлой версии не редактируются
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
 
   function toggleGroup(ids, e) {
     e?.stopPropagation();
+    if (viewingHistoricalVersion) return; // материалы прошлой версии не редактируются
     const state = checkState(ids, selected);
     setSelected(prev => {
       const n = new Set(prev);
@@ -352,7 +370,8 @@ export default function App() {
 
   function startTraining() {
     const prevVersionId = currentVersion; // захватываем до async — нужен для наследования настроек
-    setTrainedSnapshot(new Set(selected));
+    const materialsSnapshot = new Set(selected); // фиксируем материалы на момент старта — станут историей новой версии
+    setTrainedSnapshot(materialsSnapshot);
     setUpdBannerClosed(false); // новый прогон — плашка снова актуальна, сбрасываем «закрыто крестиком»
     setUpdateHover(false);
     setTrainHover(false);
@@ -374,6 +393,7 @@ export default function App() {
           author: VERSION_AUTHOR,
         };
         setCurrentVersion(newVer.id); // активна новая версия
+        setMaterialsByVersion(prevM => ({ ...prevM, [newVer.id]: materialsSnapshot }));
         setSettingsByVersion(prevS => {
           const prev = prevVersionId ? (prevS[prevVersionId] || BLANK_SETTINGS) : BLANK_SETTINGS;
           const inherited = !!prevVersionId;
@@ -390,6 +410,19 @@ export default function App() {
               dirty: false,
               saved: inherited,
               errors: {},
+            },
+          };
+        });
+        setSavedSettingsByVersion(prevSaved => {
+          const prev = prevVersionId ? (prevSaved[prevVersionId] || {}) : {};
+          return {
+            ...prevSaved,
+            [newVer.id]: {
+              botName: prev.botName || '',
+              channels: [...(prev.channels || [])],
+              assignees: [...(prev.assignees || [])],
+              transferText: prev.transferText || '',
+              avatarUrl: prev.avatarUrl || null,
             },
           };
         });
@@ -507,7 +540,7 @@ export default function App() {
     showToast('Бот остановлен');
   }
 
-  function saveSettings() {
+  function saveSettings(onSaved) {
     const nextErrors = {};
     if (botName.trim() === '')  nextErrors.botName   = 'Без названия не получится сохранить изменения';
     if (channels.length === 0)  nextErrors.channels  = 'Нужно выбрать хотя бы один канал';
@@ -519,15 +552,46 @@ export default function App() {
     }
 
     setSaveState('saving');
+    const verId = currentVersion;
+    const snapshot = { botName, channels, assignees, transferText, avatarUrl };
     setTimeout(() => {
       updateS({ errors: {}, dirty: false, saved: true });
+      setSavedSettingsByVersion(prev => ({ ...prev, [verId]: snapshot }));
       setSaveState('saved');
       setTimeout(() => setSaveState(null), 2000);
+      onSaved?.();
     }, 1000);
   }
 
   const canSave   = settingsDirty && botName.trim() !== '' && channels.length > 0 && assignees.length > 0;
   const canLaunch = settingsSaved && versions.length > 0;
+
+  // Переключение вкладки в fbar: если на «Настройках» есть несохранённые изменения — сначала спрашиваем
+  function handleTabSwitch(targetTab) {
+    if (activeTab === targetTab) return;
+    if (activeTab === 'settings' && settingsDirty) {
+      setConfirmDirtyNav({ targetTab });
+      return;
+    }
+    setActiveTab(targetTab);
+  }
+
+  function confirmSaveAndSwitchTab() {
+    const target = confirmDirtyNav.targetTab;
+    setConfirmDirtyNav(null);
+    saveSettings(() => setActiveTab(target));
+  }
+
+  function confirmDiscardAndSwitchTab() {
+    const target = confirmDirtyNav.targetTab;
+    const saved = savedSettingsByVersion[currentVersion] || {};
+    setSettingsByVersion(prev => ({
+      ...prev,
+      [currentVersion]: { ...(prev[currentVersion] || BLANK_SETTINGS), ...saved, dirty: false, errors: {} },
+    }));
+    setConfirmDirtyNav(null);
+    setActiveTab(target);
+  }
 
   function openOperator() {
     try {
@@ -596,13 +660,17 @@ export default function App() {
 
   useEffect(() => {
     try {
+      const materialsByVersionArr = {};
+      Object.keys(materialsByVersion).forEach(id => { materialsByVersionArr[id] = [...materialsByVersion[id]]; });
       localStorage.setItem('ud_chatbot', JSON.stringify({
-        versions, currentVersion, settingsByVersion,
+        versions, currentVersion, settingsByVersion, savedSettingsByVersion,
         botEverLaunched, botStatus, instructions, enableLog,
         selected: [...selected],
+        materialsByVersion: materialsByVersionArr,
+        trainedSnapshot: trainedSnapshot ? [...trainedSnapshot] : null,
       }));
     } catch {}
-  }, [versions, currentVersion, settingsByVersion, botEverLaunched, botStatus, instructions, enableLog, selected]);
+  }, [versions, currentVersion, settingsByVersion, savedSettingsByVersion, botEverLaunched, botStatus, instructions, enableLog, selected, materialsByVersion, trainedSnapshot]);
 
   // Закрытие дропдаунов по клику вне области
   useEffect(() => {
@@ -802,7 +870,7 @@ export default function App() {
               .map(({ id, label, Icon }) => (
                 <button key={id}
                   className={`fbar-item${activeTab === id ? ' fbar-item--active' : ''}`}
-                  onClick={() => setActiveTab(id)}>
+                  onClick={() => handleTabSwitch(id)}>
                   <Icon size={20} strokeWidth={1.5} className="fbar-icon" />
                   <span>{label}</span>
                 </button>
@@ -1122,7 +1190,7 @@ export default function App() {
                   <div className="settings-actions">
                     <button
                       className={`btn${saveState === 'saving' ? ' btn--accent btn--saving' : saveState === 'saved' ? ' btn--save-disabled' : canSave ? ' btn--accent' : ' btn--save-disabled'}`}
-                      onClick={canSave && !saveState ? saveSettings : undefined}
+                      onClick={canSave && !saveState ? () => saveSettings() : undefined}
                       disabled={!canSave || saveState === 'saved'}>
                       {saveState === 'saving' ? <span className="btn-spinner" /> : saveState === 'saved' ? <><Check size={16} strokeWidth={2.5} />Сохранено</> : 'Сохранить'}
                     </button>
@@ -1145,11 +1213,25 @@ export default function App() {
                   ) : messages.length === 0 && botTyping !== currentVersion ? (
                     <div className="chat-empty">
                       <div className="chat-empty__card">
-                        <img src={chatIllustration} alt="" className="chat-empty__img" />
-                        <p className="chat-empty__text">
-                          Готово!<br />
-                          Теперь вы можете отправлять сообщения в этот чат, чтобы протестировать бота
-                        </p>
+                        <svg width="48" height="48" viewBox="40.917 68.917 18.167 18.167" fill="none" xmlns="http://www.w3.org/2000/svg" className="chat-empty__icon">
+                          <path d="M50 68.917C55.0163 68.9172 59.0838 72.9837 59.084 78C59.0838 83.0163 55.0163 87.0838 50 87.084C44.9837 87.0838 40.9172 83.0163 40.917 78C40.9172 72.9837 44.9837 68.9172 50 68.917ZM54.0635 75.7334C53.6858 75.3305 53.0523 75.3098 52.6494 75.6875L48.8887 79.2129L47.3506 77.7705C46.9477 77.3931 46.3151 77.4136 45.9375 77.8164C45.5598 78.2193 45.5805 78.8518 45.9834 79.2295L48.2051 81.3135C48.5897 81.6737 49.1887 81.6739 49.5732 81.3135L54.0176 77.1465C54.4202 76.769 54.4406 76.1363 54.0635 75.7334Z" fill="#05BE23"/>
+                        </svg>
+                        <div className="chat-empty__body">
+                          {isFirstVersion ? (
+                            <>
+                              <p className="chat-empty__title">Готово!</p>
+                              <p className="chat-empty__text">Теперь вы можете отправлять сообщения в этот чат, чтобы протестировать бота</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="chat-empty__title">Новая версия создана</p>
+                              <p className="chat-empty__text">
+                                Теперь вы можете включить ее в разделе &ldquo;Настройки&rdquo;.<br />
+                                Или отправить сообщение в этот чат, чтобы протестировать новую версию бота
+                              </p>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1224,7 +1306,7 @@ export default function App() {
                   </div>
 
                   {/* Плашка обновлений */}
-                  {hasUpdates && !updBannerClosed && (
+                  {hasUpdates && !updBannerClosed && !viewingHistoricalVersion && (
                     <div className="upd-banner">
                       <div className="upd-banner__head">
                         <div className="upd-banner__head-left">
@@ -1250,13 +1332,13 @@ export default function App() {
                   {/* ── KB list ── */}
                   {KNOWLEDGE_BASES.map(kb => {
                     const kbArticleIds = kb.sections.flatMap(s => s.categories.flatMap(c => c.articles.map(a => a.id)));
-                    const kbSelIds     = kbArticleIds.filter(id => selected.has(id));
+                    const kbSelIds     = kbArticleIds.filter(id => displaySelected.has(id));
                     const kbSelChars   = kb.sections.flatMap(s => s.categories.flatMap(c => c.articles))
-                                          .filter(a => selected.has(a.id)).reduce((acc, a) => acc + a.chars, 0);
+                                          .filter(a => displaySelected.has(a.id)).reduce((acc, a) => acc + a.chars, 0);
                     const kbTotalChars = kb.sections.flatMap(s => s.categories.flatMap(c => c.articles))
                                           .reduce((acc, a) => acc + a.chars, 0);
                     const hasSelection = kbSelIds.length > 0;
-                    const kbState      = checkState(kbArticleIds, selected);
+                    const kbState      = checkState(kbArticleIds, displaySelected);
                     const isKbOpen     = expandedKbs.has(kb.id);
                     const hasContent   = kb.sections.length > 0;
                     // точка-маркер: на уровне есть обновления, если хоть одна обученная статья внутри обновлена
@@ -1324,9 +1406,9 @@ export default function App() {
                                   c.articles.some(a => a.title.toLowerCase().includes(search.toLowerCase()))))
                               .map(section => {
                                 const secIds   = section.categories.flatMap(c => c.articles.map(a => a.id));
-                                const secState = checkState(secIds, selected);
+                                const secState = checkState(secIds, displaySelected);
                                 const secChars = section.categories.flatMap(c => c.articles)
-                                                  .filter(a => selected.has(a.id)).reduce((acc, a) => acc + a.chars, 0);
+                                                  .filter(a => displaySelected.has(a.id)).reduce((acc, a) => acc + a.chars, 0);
                                 const totalSecChars = section.categories.flatMap(c => c.articles).reduce((acc, a) => acc + a.chars, 0);
                                 const isSecOpen = expandedSecs.has(section.id);
                                 const secHasUpdates = section.categories.some(c => c.articles.some(articleHasUpdate));
@@ -1347,7 +1429,7 @@ export default function App() {
                                           checked={secState === 'all'} indeterminate={secState === 'some'}
                                           onClick={e => toggleGroup(secIds, e)}
                                         />
-                                        {hoveredCb === section.id && (
+                                        {hoveredCb === section.id && !viewingHistoricalVersion && (
                                           <div className="cb-tooltip">
                                             <div className="cb-tooltip__body">{secState === 'all' ? 'Убрать из обучения' : 'Добавить к обучению'}</div>
                                             <div className="cb-tooltip__arrow" />
@@ -1370,8 +1452,8 @@ export default function App() {
                                       <div className="tree-section__body">
                                         {section.categories.map(cat => {
                                           const catIds   = cat.articles.map(a => a.id);
-                                          const catState = checkState(catIds, selected);
-                                          const catChars = cat.articles.filter(a => selected.has(a.id)).reduce((acc, a) => acc + a.chars, 0);
+                                          const catState = checkState(catIds, displaySelected);
+                                          const catChars = cat.articles.filter(a => displaySelected.has(a.id)).reduce((acc, a) => acc + a.chars, 0);
                                           const totalCatChars = cat.articles.reduce((acc, a) => acc + a.chars, 0);
                                           const isCatOpen = expandedCats.has(cat.id);
                                           const catHasUpdates = cat.articles.some(articleHasUpdate);
@@ -1392,7 +1474,7 @@ export default function App() {
                                                     checked={catState === 'all'} indeterminate={catState === 'some'}
                                                     onClick={e => toggleGroup(catIds, e)}
                                                   />
-                                                  {hoveredCb === cat.id && (
+                                                  {hoveredCb === cat.id && !viewingHistoricalVersion && (
                                                     <div className="cb-tooltip">
                                                       <div className="cb-tooltip__body">{catState === 'all' ? 'Убрать из обучения' : 'Добавить к обучению'}</div>
                                                       <div className="cb-tooltip__arrow" />
@@ -1410,18 +1492,18 @@ export default function App() {
                                                 .filter(a => !search || a.title.toLowerCase().includes(search.toLowerCase()))
                                                 .map(article => (
                                                   <div key={article.id}
-                                                    className={`tree-article${selected.has(article.id) ? ' tree-article--checked' : ''}`}
+                                                    className={`tree-article${displaySelected.has(article.id) ? ' tree-article--checked' : ''}`}
                                                     onClick={() => toggle(article.id)}>
                                                     <span className="cb-wrap"
                                                       onMouseEnter={() => setHoveredCb(article.id)}
                                                       onMouseLeave={() => setHoveredCb(null)}>
                                                       <CB
-                                                        checked={selected.has(article.id)}
+                                                        checked={displaySelected.has(article.id)}
                                                         onClick={e => { e.stopPropagation(); toggle(article.id); }}
                                                       />
-                                                      {hoveredCb === article.id && (
+                                                      {hoveredCb === article.id && !viewingHistoricalVersion && (
                                                         <div className="cb-tooltip">
-                                                          <div className="cb-tooltip__body">{selected.has(article.id) ? 'Убрать из обучения' : 'Добавить к обучению'}</div>
+                                                          <div className="cb-tooltip__body">{displaySelected.has(article.id) ? 'Убрать из обучения' : 'Добавить к обучению'}</div>
                                                           <div className="cb-tooltip__arrow" />
                                                         </div>
                                                       )}
@@ -1498,7 +1580,11 @@ export default function App() {
 
                   {/* Actions */}
                   <div className="actions-row">
-                    {!isTrained ? (
+                    {viewingHistoricalVersion ? (
+                      <span className="s-grey">
+                        Материалы версии «{ver?.label}» зафиксированы и не редактируются. Переключитесь на последнюю версию, чтобы обучить бота на новых материалах.
+                      </span>
+                    ) : !isTrained ? (
                       <div className="train-btn-wrap"
                         onMouseEnter={() => setTrainHover(true)}
                         onMouseLeave={() => setTrainHover(false)}>
@@ -1531,10 +1617,12 @@ export default function App() {
                         </div>
                       </div>
                     )}
-                    <button className="btn btn--ghost btn--lg"
-                      onClick={() => { setSelected(new Set()); setFiles([]); }}>
-                      Сбросить все
-                    </button>
+                    {!viewingHistoricalVersion && (
+                      <button className="btn btn--ghost btn--lg"
+                        onClick={() => { setSelected(new Set()); setFiles([]); }}>
+                        Сбросить все
+                      </button>
+                    )}
                   </div>
                 </>)}
               </div>
@@ -1652,7 +1740,7 @@ export default function App() {
               </div>
               <h3 className="ver-modal__title">Включить новую версию?</h3>
               <p className="ver-modal__text">
-                Сейчас работает другая версия бота: {confirmEnable.otherLabel}. Если включить выбранную версию, то предыдущая будет выключена
+                Сейчас работает другая версия бота: <b>{confirmEnable.otherLabel}</b>. Она будет выключена, если перейти на новую версию
               </p>
             </div>
             <div className="ver-modal__actions">
@@ -1662,6 +1750,32 @@ export default function App() {
               </button>
               <button className="btn btn--outline btn--block" onClick={() => setConfirmEnable(null)}>
                 Не менять версию
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка несохранённых изменений при уходе со вкладки «Настройки» */}
+      {confirmDirtyNav && (
+        <div className="overlay" onClick={() => setConfirmDirtyNav(null)}>
+          <div className="ver-modal" onClick={e => e.stopPropagation()}>
+            <button className="ver-modal__close" onClick={() => setConfirmDirtyNav(null)}>
+              <X size={24} strokeWidth={1.5} color="#676768" />
+            </button>
+            <div className="ver-modal__top">
+              <div className="ver-modal__icon">
+                <TriangleAlert size={24} strokeWidth={1.8} color="#ffaa00" />
+              </div>
+              <h3 className="ver-modal__title">Есть несохраненные изменения</h3>
+              <p className="ver-modal__text">В выбранной версии бота остались несохраненные изменения</p>
+            </div>
+            <div className="ver-modal__actions">
+              <button className="btn btn--primary btn--block" onClick={confirmSaveAndSwitchTab}>
+                Сохранить и продолжить
+              </button>
+              <button className="btn btn--outline btn--block" onClick={confirmDiscardAndSwitchTab}>
+                Уйти без сохранения
               </button>
             </div>
           </div>
